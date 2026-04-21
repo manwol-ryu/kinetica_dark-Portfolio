@@ -222,12 +222,7 @@ function normalizeGitHubRepo(value) {
   return `${parts[0]}/${parts[1]}`;
 }
 
-function resolveGitHubSiteJsonUrl(locationRef = window.location) {
-  const configuredRepo = normalizeGitHubRepo(state.data.site?.githubRepo);
-  if (configuredRepo) {
-    return `https://github.com/${configuredRepo}/blob/${githubDefaultBranch}/${githubJsonPath}`;
-  }
-
+function resolveGitHubRepoFromPagesLocation(locationRef = window.location) {
   const hostname = String(locationRef.hostname || "").toLowerCase();
   const suffix = ".github.io";
   if (!hostname.endsWith(suffix) || hostname === suffix.slice(1)) return "";
@@ -251,7 +246,19 @@ function resolveGitHubSiteJsonUrl(locationRef = window.location) {
     ? `${owner}.github.io`
     : firstPath;
 
-  return `https://github.com/${owner}/${repoName}/blob/${githubDefaultBranch}/${githubJsonPath}`;
+  return `${owner}/${repoName}`;
+}
+
+function buildGitHubSiteJsonUrl(repo) {
+  const normalizedRepo = normalizeGitHubRepo(repo);
+  return normalizedRepo
+    ? `https://github.com/${normalizedRepo}/blob/${githubDefaultBranch}/${githubJsonPath}`
+    : "";
+}
+
+function resolveGitHubSiteJsonUrl(locationRef = window.location) {
+  const repoFromPages = resolveGitHubRepoFromPagesLocation(locationRef);
+  return repoFromPages ? buildGitHubSiteJsonUrl(repoFromPages) : "";
 }
 
 function normalizeNavLinks(items) {
@@ -1702,6 +1709,7 @@ function setFloatingActionsOpen(isOpen) {
   actions.classList.toggle("is-open", isOpen);
   toggle.setAttribute("aria-expanded", String(isOpen));
   toggle.setAttribute("aria-label", isOpen ? "JSON 작업 접기" : "JSON 작업 더 보기");
+  extraActions.setAttribute("aria-hidden", String(!isOpen));
   extraActions.querySelectorAll("button").forEach((button) => {
     button.tabIndex = isOpen ? 0 : -1;
   });
@@ -1784,7 +1792,7 @@ async function loadJson(confirmReload = false) {
 async function openGitHubJson() {
   const githubUrl = resolveGitHubSiteJsonUrl();
   if (!githubUrl) {
-    setStatus("GitHub 저장소 경로를 알 수 없습니다. site.githubRepo를 확인하세요.", "error");
+    setStatus("GitHub Pages 배포 주소에서 열었을 때만 GitHub의 data/site.json 페이지로 이동할 수 있습니다.", "error");
     return;
   }
 
@@ -1810,10 +1818,16 @@ async function copyAllJson() {
         githubTab.location.href = githubUrl;
         setStatus("JSON을 복사하고 GitHub 파일 페이지를 새 탭으로 열었습니다.", "success");
       } else {
-        setStatus("JSON을 복사했습니다. 팝업 차단으로 GitHub 페이지는 열지 못했습니다.", "error");
+        const opened = window.open(githubUrl, "_blank", "noopener");
+        setStatus(
+          opened
+            ? "JSON을 복사하고 GitHub 파일 페이지를 새 탭으로 열었습니다."
+            : "JSON은 복사했지만 팝업 차단으로 GitHub 페이지를 열지 못했습니다.",
+          opened ? "success" : "error"
+        );
       }
     } else {
-      setStatus("JSON을 복사했습니다.", "success");
+      setStatus("JSON을 복사했습니다. GitHub 이동은 GitHub Pages 배포 주소에서만 동작합니다.", "success");
     }
   } catch (error) {
     if (githubTab && !githubTab.closed) githubTab.close();
@@ -1821,6 +1835,24 @@ async function copyAllJson() {
     output?.focus();
     output?.select();
     setStatus("클립보드 복사가 막혔습니다. JSON 탭에서 직접 선택해 복사하세요.", "error");
+  }
+}
+
+function downloadJsonFile() {
+  try {
+    const blob = new Blob([buildJson()], { type: "application/json;charset=utf-8" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.download = "site.json";
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    setStatus("site.json 파일을 다운로드했습니다.", "success");
+  } catch (error) {
+    setStatus(`다운로드 실패: ${error.message}`, "error");
   }
 }
 
@@ -1855,6 +1887,7 @@ function bindEvents() {
   $("#validate-json")?.addEventListener("click", validateJson);
   $("#copy-all-json")?.addEventListener("click", copyAllJson);
   $("#copy-json-panel")?.addEventListener("click", copyAllJson);
+  $("#download-json-file")?.addEventListener("click", downloadJsonFile);
   $("#open-github-json")?.addEventListener("click", openGitHubJson);
 
   $("#floating-actions-toggle")?.addEventListener("click", () => {
