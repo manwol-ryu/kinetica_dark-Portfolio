@@ -46,6 +46,10 @@
         {
           "label": "개인정보처리방침",
           "url": "contact.html"
+        },
+        {
+          "label": "GitHub Repo",
+          "url": "https://github.com/manwol-ryu/kinetica_dark-Portfolio"
         }
       ]
     }
@@ -53,7 +57,7 @@
   "hero": {
     "backgroundVideoUrl": "",
     "eyebrow": "VIDEO EDITORIAL PORTFOLIO",
-    "title": "재미있는 영상을 만들겠습니다.",
+    "title": "재미있는 영상을 \n만들겠습니다.",
     "titleAccent": "영상",
     "description": "단순한 컷 편집을 넘어, 감각적인 리듬과 색감으로 브랜드의 고유한 서사를 시각화합니다. 기술적 정교함과 예술적 통찰력이 만나는 지점에서 작업합니다.",
     "statusLabel": "",
@@ -104,9 +108,14 @@
         "title": "BGM 사용 툴",
         "items": [
           {
-            "name": "Artlist ",
+            "name": "Artlist",
             "logoUrl": "https://search.pstatic.net/sunny?src=https%3A%2F%2Fartlist.io%2Ffavicon.ico%3Fv%3D1&type=f30_30_png_expire24",
             "logoAlt": "아트리스트 파비콘"
+          },
+          {
+            "name": "뮤팟",
+            "logoUrl": "https://i.namu.wiki/i/NCLySXrh5IA5yfffX9NXuDHPdPOedGwH0XK_B1aZx6V9PfvSZrCeQDIGypbA5pnPRZ3jYBt1XGYABSClWrd8TyP0R58AtCX38RE8AJFa0uY4sErYNdcqarurH13Y26UzZTsa9mWLTfMEfHAns5iX4g.webp",
+            "logoAlt": "뮤팟 logo"
           }
         ]
       }
@@ -191,7 +200,7 @@
     "sectionDescription": "",
     "emptyText": "해당 조건의 영상이 없습니다.",
     "displayMode": "grid",
-    "gridColumns": 3,
+    "gridColumns": 4,
     "categoryStackColumns": 2,
     "categoryStackTypeFilterEnabled": false,
     "categoryStackSingleColumnSize": "medium",
@@ -348,7 +357,7 @@
     "details": [
       {
         "label": "Email",
-        "value": " manwol1578@gmail.com"
+        "value": "manwol1578@gmail.com"
       },
       {
         "label": "Response",
