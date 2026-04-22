@@ -1,11 +1,11 @@
 {
   "site": {
-    "title": "진영 포트폴리오",
-    "description": "브랜드와 콘텐츠의 결을 편집으로 정리하는 영상 편집자 진영의 포트폴리오입니다.",
+    "title": "만월 포트폴리오",
+    "description": "브랜드와 콘텐츠의 결을 편집으로 정리하는 영상 편집자 만월의 포트폴리오입니다.",
     "githubRepo": "manwol-ryu/kinetica_dark-Portfolio",
     "brand": {
       "prefix": "studio",
-      "name": "jinyeong"
+      "name": "manwol"
     },
     "nav": {
       "links": [
@@ -31,9 +31,9 @@
     },
     "footer": {
       "enabled": true,
-      "linksEnabled": true,
-      "title": "STUDIO JINYEONG",
-      "copy": "© 2026 STUDIO JINYEONG. 모든 권리 보유.",
+      "linksEnabled": false,
+      "title": "STUDIO MANWOL",
+      "copy": "© 2026 STUDIO MANWOL. 모든 권리 보유.",
       "links": [
         {
           "label": "유튜브",
@@ -51,13 +51,13 @@
     }
   },
   "hero": {
-    "backgroundVideoUrl": "https://assets.mixkit.co/videos/preview/mixkit-digital-animation-of-a-geometric-shape-in-gold-41484-large.mp4",
+    "backgroundVideoUrl": "",
     "eyebrow": "VIDEO EDITORIAL PORTFOLIO",
-    "title": "영상으로\n이야기를 만듭니다.",
-    "titleAccent": "이야기",
+    "title": "재미있는 영상을 만들겠습니다.",
+    "titleAccent": "영상",
     "description": "단순한 컷 편집을 넘어, 감각적인 리듬과 색감으로 브랜드의 고유한 서사를 시각화합니다. 기술적 정교함과 예술적 통찰력이 만나는 지점에서 작업합니다.",
-    "statusLabel": "Status",
-    "statusText": "AVAILABLE FOR NEW PROJECTS",
+    "statusLabel": "",
+    "statusText": "",
     "actions": [
       {
         "label": "작업물 보기",
@@ -75,22 +75,45 @@
       "career": {
         "title": "경력사항",
         "mode": "structured",
-        "structuredItems": [],
+        "structuredItems": [
+          {
+            "title": "키리누키 채널 운영 (꼬질꼬질한 캔따개)",
+            "period": "2025-10 ~",
+            "description": "개인 키리누키 채널"
+          }
+        ],
         "simpleItems": [],
         "freeformText": ""
       },
       "tools": {
         "title": "사용 가능한 툴",
-        "items": []
+        "items": [
+          {
+            "name": "Premiere Pro",
+            "logoUrl": "https://i.namu.wiki/i/Ij7VsOqUO-M0A1wkmGU3M3lL98IoQjm1_WWSaaKf3bThbZ5iml-pY3Totigp0p-IjbzTQ0sAGPqMxjugufdZUA.svg",
+            "logoAlt": "Premiere Pro logo"
+          },
+          {
+            "name": "Photoshop",
+            "logoUrl": "https://i.namu.wiki/i/utkZKZsqgX2lN8bVgT6iAhkVQgGSTVlpzhqXPf0ATuiqYpEGq6rhGq2SPMElqlrngMTowqBLd8ywzgv4VpKdHg.svg",
+            "logoAlt": "Photoshop logo"
+          }
+        ]
       },
       "bgm": {
         "title": "BGM 사용 툴",
-        "items": []
+        "items": [
+          {
+            "name": "Artlist ",
+            "logoUrl": "https://search.pstatic.net/sunny?src=https%3A%2F%2Fartlist.io%2Ffavicon.ico%3Fv%3D1&type=f30_30_png_expire24",
+            "logoAlt": "아트리스트 파비콘"
+          }
+        ]
       }
     }
   },
   "projects": {
-    "enabled": true,
+    "enabled": false,
     "sectionEyebrow": "Featured Works",
     "sectionTitle": "SELECTED PROJECT",
     "sectionMeta": "2024 COLLECTION",
@@ -143,7 +166,7 @@
     ]
   },
   "stats": {
-    "enabled": true,
+    "enabled": false,
     "items": [
       {
         "value": "150+",
@@ -172,24 +195,76 @@
     "categoryStackColumns": 2,
     "categoryStackTypeFilterEnabled": false,
     "categoryStackSingleColumnSize": "medium",
-    "categoryOrder": [],
-    "categoryEntries": [],
-    "videos": []
+    "categoryOrder": [
+      "연습용",
+      "꼬질꼬질한 캔따개"
+    ],
+    "categoryEntries": [
+      {
+        "category": "연습용",
+        "title": "",
+        "meta": "",
+        "columns": null,
+        "singleColumnSize": ""
+      },
+      {
+        "category": "꼬질꼬질한 캔따개",
+        "title": "",
+        "meta": "",
+        "columns": null,
+        "singleColumnSize": ""
+      }
+    ],
+    "videos": [
+      {
+        "id": "MUbyQ7Q87ck",
+        "title": "연습용 포트폴리오",
+        "date": "2025-08-31",
+        "type": "long",
+        "category": "연습용"
+      },
+      {
+        "id": "oPdIUvgngNc",
+        "title": "희생자 구해요 [꼬질꼬질한 프사데이]",
+        "date": "",
+        "type": "long",
+        "category": "꼬질꼬질한 캔따개"
+      },
+      {
+        "id": "gMYfCzoBVQA",
+        "title": "치지직으로 이직하면 먹여 살려주세요",
+        "date": "",
+        "type": "long",
+        "category": "꼬질꼬질한 캔따개"
+      },
+      {
+        "id": "I_78Z5Htcgo",
+        "title": "정치드립은 마짱 까자",
+        "date": "",
+        "type": "short",
+        "category": "꼬질꼬질한 캔따개"
+      },
+      {
+        "id": "riFQfMFWda8",
+        "title": "신기한 동물사전 [꼬질꼬질한 게임영상] #shorts #vtuber",
+        "date": "2025-11-29",
+        "type": "short",
+        "category": "꼬질꼬질한 캔따개"
+      }
+    ]
   },
   "pricing": {
     "sectionEyebrow": "Pricing & Packages",
     "title": "당신의 비전을 편집의 예술로.",
     "description": "크리에이터의 개성과 브랜드의 가치를 극대화하는 맞춤형 비디오 편집 솔루션입니다. 전문적인 기술력과 감각적인 연출로 결과의 차이를 만듭니다.",
-    "customWorksEnabled": true,
-    "processEnabled": true,
     "plans": [
       {
         "slug": "short",
-        "badge": "Short-form Pack",
+        "badge": "",
         "icon": "smartphone",
         "title": "숏폼 (Short-form)",
         "description": "YouTube Shorts, TikTok, Reels 등 트렌디하고 압축적인 영상미가 필요한 콘텐츠",
-        "price": "₩150,000",
+        "price": "₩20,000",
         "priceUnit": "/ 편",
         "features": [
           "최대 60초 분량",
@@ -203,17 +278,15 @@
       },
       {
         "slug": "long",
-        "badge": "Most Popular",
+        "badge": "",
         "icon": "movie_edit",
         "title": "롱폼 (Long-form)",
         "description": "유튜브 브이로그, 인터뷰, 홍보 영상 등 서사와 정보 전달 중심의 영상 콘텐츠",
-        "price": "₩500,000",
-        "priceUnit": "/ 편",
+        "price": "₩15,000",
+        "priceUnit": "/ 분당",
         "features": [
           "최대 15분 분량",
-          "맞춤형 그래픽 디자인",
-          "프리미엄 사운드 디자인",
-          "전문 컷편집 및 자막 작업"
+          "편집점 있을시 분당 ₩12,000"
         ],
         "cta": {
           "label": "지금 바로 상담",
@@ -221,6 +294,7 @@
         }
       }
     ],
+    "customWorksEnabled": false,
     "customWorks": [
       {
         "eyebrow": "Studio Quality",
@@ -232,6 +306,7 @@
         "imageAlt": "dark video editing suite with yellow and cyan lights"
       }
     ],
+    "processEnabled": true,
     "processTitle": "진행 프로세스 및 정책",
     "processSteps": [
       {
@@ -252,7 +327,7 @@
       {
         "number": "04",
         "title": "최종 납품",
-        "description": "최종 승인된 고화질 마스터 파일을 전달하며 마무리됩니다."
+        "description": "최종 승인된 영상은 원본 화질로 렌더링하여 전달하며 마무리됩니다."
       }
     ]
   },
@@ -263,7 +338,7 @@
     "description": "프로젝트 제안 및 협업 문의는 아래 디스코드 계정을 통해 가장 빠르게 확인하실 수 있습니다.",
     "primaryCard": {
       "label": "Discord ID",
-      "value": "jinyeoung_",
+      "value": "rurimiru.",
       "note": "친구 추가 후 메시지를 보내주세요",
       "icon": "chat",
       "href": ""
@@ -271,15 +346,11 @@
     "details": [
       {
         "label": "Email",
-        "value": "jinyeoung0828@gmail.com"
+        "value": " manwol1578@gmail.com"
       },
       {
         "label": "Response",
-        "value": "Within 24 Hours"
-      },
-      {
-        "label": "Location",
-        "value": "Busan, South Korea"
+        "value": "1일 이내 답변"
       }
     ]
   },
