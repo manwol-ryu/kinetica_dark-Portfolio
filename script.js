@@ -327,6 +327,71 @@ function normalizeLinkArray(items) {
     : [];
 }
 
+function normalizeGitHubRepo(value) {
+  let repo = String(value || "").trim();
+  if (!repo) return "";
+
+  repo = repo
+    .replace(/^https?:\/\/github\.com\//i, "")
+    .replace(/^git@github\.com:/i, "")
+    .replace(/\.git$/i, "")
+    .replace(/^\/+|\/+$/g, "");
+
+  const parts = repo.split("/").filter(Boolean);
+  if (parts.length < 2) return "";
+  return `${parts[0]}/${parts[1]}`;
+}
+
+function resolveGitHubRepoFromPagesLocation(locationRef = window.location) {
+  const hostname = String(locationRef.hostname || "").toLowerCase();
+  const suffix = ".github.io";
+  if (!hostname.endsWith(suffix) || hostname === suffix.slice(1)) return "";
+
+  const owner = hostname.slice(0, -suffix.length);
+  if (!owner) return "";
+
+  const pathParts = String(locationRef.pathname || "")
+    .split("/")
+    .filter(Boolean)
+    .map((part) => {
+      try {
+        return decodeURIComponent(part);
+      } catch (error) {
+        return part;
+      }
+    });
+
+  const firstPath = pathParts[0] || "";
+  const repoName = !firstPath || /^.+\.html?$/i.test(firstPath) || firstPath === "admin"
+    ? `${owner}.github.io`
+    : firstPath;
+
+  return `${owner}/${repoName}`;
+}
+
+function buildGitHubRepoUrl(repo) {
+  const normalizedRepo = normalizeGitHubRepo(repo);
+  return normalizedRepo ? `https://github.com/${normalizedRepo}` : "";
+}
+
+function getEffectiveGitHubRepo(repoValue = DATA.site?.githubRepo, locationRef = window.location) {
+  return normalizeGitHubRepo(repoValue) || resolveGitHubRepoFromPagesLocation(locationRef);
+}
+
+function getEffectiveFooterLinks(links = DATA.site?.footer?.links, repoValue = DATA.site?.githubRepo, locationRef = window.location) {
+  const normalizedLinks = normalizeLinkArray(links);
+  const effectiveRepo = getEffectiveGitHubRepo(repoValue, locationRef);
+  if (!effectiveRepo) return normalizedLinks;
+
+  const hasRepoLink = normalizedLinks.some((link) => normalizeGitHubRepo(link.url || link.href) === effectiveRepo);
+  if (hasRepoLink) return normalizedLinks;
+
+  const repoUrl = buildGitHubRepoUrl(effectiveRepo);
+  return repoUrl
+    ? [...normalizedLinks, { label: "GitHub Repo", href: repoUrl, url: repoUrl }]
+    : normalizedLinks;
+}
+
 function normalizeHeroCareerMode(value) {
   return ["structured", "simple", "freeform"].includes(value) ? value : "structured";
 }
@@ -1666,7 +1731,7 @@ function renderFooter() {
 
   const links = $("#footer-links");
   if (links) {
-    const items = DATA.site.footer.links.filter((link) => link.label);
+    const items = getEffectiveFooterLinks(DATA.site.footer.links, DATA.site.githubRepo).filter((link) => link.label);
     links.innerHTML = items.map((link) => {
       const href = resolvePreviewAwareHref(link.url || link.href) || "#";
       const external = isExternalHref(href) ? ' target="_blank" rel="noopener"' : "";

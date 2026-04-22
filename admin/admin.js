@@ -231,7 +231,6 @@ const state = {
 const DIRECT_BINDINGS = {
   "site-title": ["site", "title"],
   "site-description": ["site", "description"],
-  "site-github-repo": ["site", "githubRepo"],
   "brand-prefix": ["site", "brand", "prefix"],
   "brand-name": ["site", "brand", "name"],
   "nav-cta-label": ["site", "nav", "ctaLabel"],
@@ -261,7 +260,6 @@ const DIRECT_BINDINGS = {
   "contact-card-label": ["contact", "primaryCard", "label"],
   "contact-card-value": ["contact", "primaryCard", "value"],
   "contact-card-note": ["contact", "primaryCard", "note"],
-  "contact-card-icon": ["contact", "primaryCard", "icon"],
   "contact-card-href": ["contact", "primaryCard", "href"],
   "footer-title": ["site", "footer", "title"],
   "footer-copy": ["site", "footer", "copy"],
@@ -276,6 +274,41 @@ const CHECKBOX_BINDINGS = {
   "footer-enabled": ["site", "footer", "enabled"],
   "footer-links-enabled": ["site", "footer", "linksEnabled"],
 };
+
+const MATERIAL_ICON_OPTIONS = Object.freeze([
+  { value: "movie_edit", label: "영상 편집", keywords: "video edit movie editing 편집 영상" },
+  { value: "smart_display", label: "플랫폼 영상", keywords: "youtube display platform 유튜브 플랫폼" },
+  { value: "play_circle", label: "재생", keywords: "play circle video 재생 플레이" },
+  { value: "videocam", label: "촬영", keywords: "video camera shoot 촬영 카메라" },
+  { value: "video_camera_front", label: "카메라", keywords: "camera front creator 카메라 크리에이터" },
+  { value: "movie", label: "무비", keywords: "movie film cinema 무비 영화" },
+  { value: "slideshow", label: "슬라이드", keywords: "slide reel showcase 슬라이드 릴 쇼케이스" },
+  { value: "smartphone", label: "모바일", keywords: "phone mobile shorts reel 모바일 숏폼 쇼츠 릴스" },
+  { value: "auto_awesome", label: "강조 효과", keywords: "sparkle highlight awesome 강조 효과 반짝" },
+  { value: "bolt", label: "빠른 작업", keywords: "fast quick speed 빠른 스피드" },
+  { value: "rocket_launch", label: "런칭", keywords: "launch rocket opening 런칭 오픈" },
+  { value: "palette", label: "컬러 디자인", keywords: "color palette design 디자인 컬러" },
+  { value: "brush", label: "그래픽", keywords: "graphic brush art 그래픽 아트" },
+  { value: "music_note", label: "음악", keywords: "music bgm audio 음악 배경음악" },
+  { value: "headphones", label: "오디오", keywords: "audio sound headphones 오디오 사운드" },
+  { value: "record_voice_over", label: "나레이션", keywords: "voice narration over 더빙 나레이션 보이스" },
+  { value: "campaign", label: "광고", keywords: "ad marketing campaign 광고 마케팅" },
+  { value: "ads_click", label: "퍼포먼스", keywords: "ads click performance 클릭 광고 성과" },
+  { value: "work", label: "업무", keywords: "work business 업무 비즈니스" },
+  { value: "folder_open", label: "프로젝트", keywords: "project folder open 프로젝트 폴더" },
+  { value: "check_circle", label: "체크", keywords: "check confirm ok 체크 확인" },
+  { value: "mail", label: "이메일", keywords: "mail email contact 이메일 메일 연락" },
+  { value: "chat", label: "채팅", keywords: "chat message talk 채팅 메시지 상담" },
+  { value: "forum", label: "대화", keywords: "forum community discussion 대화 커뮤니티" },
+  { value: "call", label: "전화", keywords: "call phone contact 전화 통화" },
+  { value: "language", label: "웹사이트", keywords: "language web site website 웹사이트 사이트" },
+  { value: "link", label: "링크", keywords: "link url chain 링크 주소" },
+  { value: "support_agent", label: "고객 지원", keywords: "support agent service 고객 지원 서비스" },
+  { value: "schedule", label: "일정", keywords: "schedule time calendar 일정 시간" },
+  { value: "calendar_month", label: "캘린더", keywords: "calendar month plan 캘린더 월간 일정" },
+  { value: "groups", label: "팀", keywords: "group team people 팀 그룹 사람" },
+  { value: "person", label: "개인", keywords: "person creator individual 개인 크리에이터" },
+]);
 
 const HERO_TOOL_PRESETS = Object.freeze({
   "premiere-pro": {
@@ -469,9 +502,38 @@ function buildGitHubSiteJsonUrl(repo) {
     : "";
 }
 
-function resolveGitHubSiteJsonUrl(locationRef = window.location) {
-  const repoFromPages = resolveGitHubRepoFromPagesLocation(locationRef);
-  return repoFromPages ? buildGitHubSiteJsonUrl(repoFromPages) : "";
+function buildGitHubRepoUrl(repo) {
+  const normalizedRepo = normalizeGitHubRepo(repo);
+  return normalizedRepo ? `https://github.com/${normalizedRepo}` : "";
+}
+
+function getEffectiveGitHubRepo(repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
+  return normalizeGitHubRepo(repoValue) || resolveGitHubRepoFromPagesLocation(locationRef);
+}
+
+function getAutoFooterRepoLink(links = state.data?.site?.footer?.links, repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
+  const effectiveRepo = getEffectiveGitHubRepo(repoValue, locationRef);
+  if (!effectiveRepo) return null;
+
+  const normalizedLinks = normalizeFooterLinks(links);
+  const hasRepoLink = normalizedLinks.some((link) => normalizeGitHubRepo(link.url || link.href) === effectiveRepo);
+  if (hasRepoLink) return null;
+
+  return {
+    label: "GitHub Repo",
+    url: buildGitHubRepoUrl(effectiveRepo),
+  };
+}
+
+function getEffectiveFooterLinks(links = state.data?.site?.footer?.links, repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
+  const normalizedLinks = normalizeFooterLinks(links);
+  const autoLink = getAutoFooterRepoLink(normalizedLinks, repoValue, locationRef);
+  return autoLink ? [...normalizedLinks, autoLink] : normalizedLinks;
+}
+
+function resolveGitHubSiteJsonUrl(locationRef = window.location, repoValue = state.data?.site?.githubRepo) {
+  const effectiveRepo = getEffectiveGitHubRepo(repoValue, locationRef);
+  return effectiveRepo ? buildGitHubSiteJsonUrl(effectiveRepo) : "";
 }
 
 function normalizeNavLinks(items) {
@@ -1244,8 +1306,16 @@ function setWorksUrlFeedback(message, type = "") {
   }
 }
 
+function serializeData() {
+  const data = clone(state.data);
+  const effectiveRepo = getEffectiveGitHubRepo(data.site?.githubRepo);
+  data.site.githubRepo = effectiveRepo || normalizeGitHubRepo(data.site?.githubRepo) || "";
+  data.site.footer.links = getEffectiveFooterLinks(data.site?.footer?.links, data.site.githubRepo);
+  return data;
+}
+
 function buildJson() {
-  return `${JSON.stringify(state.data, null, 2)}\n`;
+  return `${JSON.stringify(serializeData(), null, 2)}\n`;
 }
 
 function refreshJsonOutput() {
@@ -1253,9 +1323,170 @@ function refreshJsonOutput() {
   if (output) output.value = buildJson();
 }
 
+function renderGitHubRepoField({ preserveInputValue = false } = {}) {
+  const input = $("#site-github-repo");
+  const note = $("#site-github-repo-note");
+  if (!input) return;
+
+  const rawRepo = String(state.data.site?.githubRepo || "").trim();
+  const normalizedRepo = normalizeGitHubRepo(rawRepo);
+  const inferredRepo = resolveGitHubRepoFromPagesLocation();
+  const effectiveRepo = normalizedRepo || inferredRepo;
+
+  if (!preserveInputValue) {
+    input.value = rawRepo || effectiveRepo || "";
+  }
+  input.placeholder = effectiveRepo || "owner/repo";
+
+  if (!note) return;
+
+  if (rawRepo && normalizedRepo) {
+    note.textContent = "직접 입력한 GitHub Repo를 사용합니다.";
+    return;
+  }
+
+  if (rawRepo && !normalizedRepo) {
+    note.textContent = inferredRepo
+      ? `owner/repo 형식이 아니어서 현재 GitHub Pages 주소의 ${inferredRepo}를 대신 사용합니다.`
+      : "owner/repo 형식으로 입력해주세요.";
+    return;
+  }
+
+  if (inferredRepo) {
+    note.textContent = `현재 GitHub Pages 주소에서 ${inferredRepo}를 자동으로 감지해 사용합니다.`;
+    return;
+  }
+
+  note.textContent = "GitHub Pages에서 열면 현재 repo를 자동으로 감지합니다.";
+}
+
 function textOrFallback(value, fallback) {
   const text = String(value || "").trim();
   return text || fallback;
+}
+
+function getIconPickerOptions(selectedIcon, { emptyLabel = "없음", previewFallback = "" } = {}) {
+  const normalizedSelected = String(selectedIcon || "").trim();
+  const options = [
+    {
+      value: "",
+      label: emptyLabel,
+      keywords: `${emptyLabel} none empty 기본값 없음 비우기`,
+      displayName: previewFallback || "없음",
+      previewIcon: previewFallback || "hide_image",
+    },
+    ...MATERIAL_ICON_OPTIONS.map((option) => ({
+      ...option,
+      displayName: option.value,
+      previewIcon: option.value,
+    })),
+  ];
+
+  if (normalizedSelected && !options.some((option) => option.value === normalizedSelected)) {
+    options.unshift({
+      value: normalizedSelected,
+      label: "현재 저장된 아이콘",
+      keywords: normalizedSelected,
+      displayName: normalizedSelected,
+      previewIcon: normalizedSelected,
+    });
+  }
+
+  return options;
+}
+
+function renderIconPickerMarkup(selectedIcon, {
+  scope,
+  planIndex = null,
+  emptyLabel = "없음",
+  previewFallback = "",
+  helperText = "",
+} = {}) {
+  const normalizedSelected = String(selectedIcon || "").trim();
+  const options = getIconPickerOptions(normalizedSelected, { emptyLabel, previewFallback });
+  const selectedOption = options.find((option) => option.value === normalizedSelected) || options[0];
+  const previewIcon = normalizedSelected || previewFallback || "hide_image";
+  const summaryLabel = selectedOption?.label || "아이콘 선택";
+  const summaryName = normalizedSelected || (previewFallback ? `기본값 (${previewFallback})` : emptyLabel);
+  const pickerAttributes = [
+    `data-icon-picker`,
+    `data-icon-picker-scope="${escapeHTML(scope)}"`,
+    planIndex != null ? `data-plan-index="${escapeHTML(String(planIndex))}"` : "",
+  ].filter(Boolean).join(" ");
+
+  return `
+    <details class="icon-picker" ${pickerAttributes}>
+      <summary class="icon-picker-summary">
+        <div class="icon-picker-current">
+          <span class="material-symbols-outlined icon-picker-current-symbol">${escapeHTML(previewIcon)}</span>
+          <div class="icon-picker-current-copy">
+            <strong>${escapeHTML(summaryLabel)}</strong>
+            <span>${escapeHTML(summaryName)}</span>
+          </div>
+        </div>
+        <span class="icon-picker-summary-action">직접 고르기</span>
+      </summary>
+      <div class="icon-picker-body">
+        <label class="field icon-picker-search-field">
+          <span>검색</span>
+          <input type="search" data-icon-picker-search placeholder="메일, 채팅, 영상, phone 등으로 검색">
+        </label>
+        <div class="icon-picker-grid">
+          ${options.map((option) => {
+            const optionValue = String(option.value || "");
+            const optionPreview = String(option.previewIcon || optionValue || previewFallback || "hide_image");
+            const optionName = String(option.displayName || optionValue || emptyLabel);
+            const searchText = `${optionValue} ${option.label || ""} ${option.keywords || ""}`.toLowerCase();
+            return `
+              <button
+                class="icon-picker-option ${optionValue === normalizedSelected ? "is-selected" : ""}"
+                type="button"
+                data-icon-picker-value="${escapeHTML(optionValue)}"
+                data-icon-search="${escapeHTML(searchText)}"
+              >
+                <span class="material-symbols-outlined icon-picker-option-symbol">${escapeHTML(optionPreview)}</span>
+                <span class="icon-picker-option-label">${escapeHTML(option.label || optionName)}</span>
+                <span class="icon-picker-option-name">${escapeHTML(optionName)}</span>
+              </button>
+            `;
+          }).join("")}
+        </div>
+        <p class="icon-picker-empty" data-icon-picker-empty hidden>검색 결과가 없습니다.</p>
+        ${helperText ? `<p class="field-note">${escapeHTML(helperText)}</p>` : ""}
+      </div>
+    </details>
+  `;
+}
+
+function filterIconPickerOptions(picker, keyword = "") {
+  if (!picker) return;
+  const normalizedKeyword = String(keyword || "").trim().toLowerCase();
+  const buttons = [...picker.querySelectorAll("[data-icon-picker-value]")];
+  let visibleCount = 0;
+
+  buttons.forEach((button) => {
+    const haystack = String(button.dataset.iconSearch || "").toLowerCase();
+    const matches = !normalizedKeyword || haystack.includes(normalizedKeyword);
+    button.hidden = !matches;
+    if (matches) visibleCount += 1;
+  });
+
+  const empty = picker.querySelector("[data-icon-picker-empty]");
+  if (empty) empty.hidden = visibleCount > 0;
+}
+
+function renderContactCardIconPicker() {
+  const input = $("#contact-card-icon");
+  const container = $("#contact-card-icon-picker");
+  if (!input || !container) return;
+
+  input.value = String(state.data.contact.primaryCard.icon || "").trim();
+  container.innerHTML = renderIconPickerMarkup(state.data.contact.primaryCard.icon, {
+    scope: "contact-card",
+    emptyLabel: "기본값 사용",
+    previewFallback: "mail",
+    helperText: "문의 카드에 표시할 아이콘을 직접 고를 수 있습니다. 기본값 사용을 선택하면 공개 페이지에서는 mail 아이콘이 보입니다.",
+  });
 }
 
 function escapeWithBreaks(value) {
@@ -1735,7 +1966,7 @@ function renderPreviewPlanCards() {
 }
 
 function renderPreviewFooterLinks() {
-  const links = state.data.site.footer.links.filter((link) => link.label);
+  const links = getEffectiveFooterLinks(state.data.site.footer.links).filter((link) => link.label);
   if (!links.length) {
     return '<span class="text-xs uppercase tracking-[0.2em] text-[#8b8577]">푸터 링크를 추가하면 이곳에 표시됩니다.</span>';
   }
@@ -2115,8 +2346,8 @@ function renderSummary() {
   $("#summary-works").textContent = String(state.data.works.videos.length);
   $("#summary-plans").textContent = String(state.data.pricing.plans.length);
   $("#summary-steps").textContent = String(state.data.pricing.processSteps.length);
-  const repo = normalizeGitHubRepo(state.data.site.githubRepo) || "-";
-  $("#summary-footer").textContent = `${state.data.site.footer.links.length} / ${repo}`;
+  const repo = getEffectiveGitHubRepo(state.data.site.githubRepo) || "-";
+  $("#summary-footer").textContent = `${getEffectiveFooterLinks(state.data.site.footer.links).length} / ${repo}`;
 }
 
 function rowActions(listKey, index, deleteLabel = "삭제") {
@@ -2540,6 +2771,7 @@ function renderWorksDisplaySettings() {
   const displayMode = normalizeWorksDisplayMode(works.displayMode);
   const gridGroup = $("#works-grid-settings-group");
   const stackGroup = $("#works-category-stack-settings-group");
+  const categoryOrderSection = $("#works-category-order-section");
   const singleSizeField = $("#works-category-stack-single-column-size-field");
   const displayModeInput = $("#works-display-mode");
   const gridColumnsInput = $("#works-grid-columns");
@@ -2561,6 +2793,10 @@ function renderWorksDisplaySettings() {
   if (stackGroup) {
     stackGroup.hidden = displayMode !== "category-stack";
     stackGroup.classList.toggle("is-active", displayMode === "category-stack");
+  }
+  if (categoryOrderSection) {
+    categoryOrderSection.hidden = displayMode !== "category-stack";
+    categoryOrderSection.classList.toggle("is-active", displayMode === "category-stack");
   }
   if (singleSizeField) {
     singleSizeField.hidden = displayMode !== "category-stack" || !isSingleColumn;
@@ -2714,20 +2950,25 @@ function renderPricingPlanList() {
           <input type="text" value="${escapeHTML(plan.badge)}" data-plan-field="badge">
         </label>
         <label class="field">
-          <span>아이콘</span>
-          <input type="text" value="${escapeHTML(plan.icon)}" data-plan-field="icon">
-        </label>
-        <label class="field">
           <span>가격</span>
           <input type="text" value="${escapeHTML(plan.price)}" data-plan-field="price">
         </label>
         <label class="field">
           <span>카드 디자인</span>
           <select data-plan-field="design">
-            <option value="shortform" ${normalizePricingPlanDesign(plan.design, "shortform") === "shortform" ? "selected" : ""}>숏폼 스타일</option>
-            <option value="longform" ${normalizePricingPlanDesign(plan.design, "shortform") === "longform" ? "selected" : ""}>롱폼 스타일</option>
+            <option value="shortform" ${normalizePricingPlanDesign(plan.design, "shortform") === "shortform" ? "selected" : ""}>기본</option>
+            <option value="longform" ${normalizePricingPlanDesign(plan.design, "shortform") === "longform" ? "selected" : ""}>강조</option>
           </select>
         </label>
+        <div class="field span-2">
+          <span>아이콘 선택</span>
+          ${renderIconPickerMarkup(plan.icon, {
+            scope: "plan",
+            planIndex: index,
+            emptyLabel: "아이콘 없음",
+            helperText: "플랜 카드 상단에 노출할 아이콘을 직접 선택할 수 있습니다.",
+          })}
+        </div>
         <label class="field span-2">
           <span>제목</span>
           <input type="text" value="${escapeHTML(plan.title)}" data-plan-field="title">
@@ -2853,11 +3094,14 @@ function renderContactDetailList() {
 function renderFooterLinkList() {
   const list = $("#footer-link-list");
   if (!list) return;
-  if (!state.data.site.footer.links.length) {
+  const manualLinks = normalizeFooterLinks(state.data.site.footer.links);
+  const autoRepoLink = getAutoFooterRepoLink(manualLinks);
+
+  if (!manualLinks.length && !autoRepoLink) {
     list.innerHTML = '<div class="empty-state slim">등록된 푸터 링크가 없습니다.</div>';
     return;
   }
-  list.innerHTML = state.data.site.footer.links.map((link, index) => `
+  const manualMarkup = manualLinks.map((link, index) => `
     <article class="editor-row three-col" data-footer-link-index="${index}">
       <label class="field">
         <span>라벨</span>
@@ -2870,11 +3114,32 @@ function renderFooterLinkList() {
       ${rowActions("footer-links", index)}
     </article>
   `).join("");
+
+  const autoMarkup = autoRepoLink ? `
+    <article class="editor-row three-col">
+      <label class="field">
+        <span>라벨</span>
+        <input type="text" value="${escapeHTML(autoRepoLink.label)}" readonly>
+      </label>
+      <label class="field">
+        <span>URL</span>
+        <input type="text" value="${escapeHTML(autoRepoLink.url)}" readonly>
+      </label>
+      <div class="auto-generated-indicator">
+        <span class="auto-generated-badge">자동 등록</span>
+        <p>GitHub Pages repo 기준</p>
+      </div>
+    </article>
+  ` : "";
+
+  list.innerHTML = `${manualMarkup}${autoMarkup}`;
 }
 
 function renderAll() {
   syncWorksCategoryOrderState();
   renderDirectInputs();
+  renderGitHubRepoField();
+  renderContactCardIconPicker();
   renderCheckboxInputs();
   renderSummary();
   renderNavLinkList();
@@ -3018,9 +3283,9 @@ async function loadJson(confirmReload = false) {
 }
 
 async function openGitHubJson() {
-  const githubUrl = resolveGitHubSiteJsonUrl();
+  const githubUrl = resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo);
   if (!githubUrl) {
-    setStatus("GitHub Pages 배포 주소에서 열었을 때만 GitHub의 data/site.json 페이지로 이동할 수 있습니다.", "error");
+    setStatus("GitHub Repo를 입력하거나 GitHub Pages 배포 주소에서 열어주세요.", "error");
     return;
   }
 
@@ -3035,7 +3300,7 @@ async function openGitHubJson() {
 
 async function copyAllJson() {
   const json = buildJson();
-  const githubUrl = resolveGitHubSiteJsonUrl();
+  const githubUrl = resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo);
   const githubTab = githubUrl ? window.open("", "_blank") : null;
 
   try {
@@ -3055,7 +3320,7 @@ async function copyAllJson() {
         );
       }
     } else {
-      setStatus("JSON을 복사했습니다. GitHub 이동은 GitHub Pages 배포 주소에서만 동작합니다.", "success");
+      setStatus("JSON을 복사했습니다. GitHub 이동은 GitHub Repo가 있거나 GitHub Pages 주소에서만 동작합니다.", "success");
     }
   } catch (error) {
     if (githubTab && !githubTab.closed) githubTab.close();
@@ -3134,6 +3399,16 @@ function bindEvents() {
     setFloatingActionsOpen(!$(".floating-actions")?.classList.contains("is-open"));
   });
   setFloatingActionsOpen(false);
+
+  $("#site-github-repo")?.addEventListener("input", (event) => {
+    state.data.site.githubRepo = event.target.value;
+    renderGitHubRepoField({ preserveInputValue: true });
+    renderSummary();
+    renderFooterLinkList();
+    refreshJsonOutput();
+    renderLivePreview();
+    setStatus("GitHub Repo 설정이 반영되었습니다.", "success");
+  });
 
   $("#add-nav-link")?.addEventListener("click", () => {
     state.data.site.nav.links.push({ label: "", href: "" });
@@ -3541,6 +3816,13 @@ function bindEvents() {
     handlePricingPlanFieldChange(event);
   });
 
+  document.addEventListener("input", (event) => {
+    const searchInput = event.target.closest("[data-icon-picker-search]");
+    if (!searchInput) return;
+    const picker = searchInput.closest("[data-icon-picker]");
+    filterIconPickerOptions(picker, searchInput.value);
+  });
+
   $("#custom-work-list")?.addEventListener("input", (event) => {
     const row = event.target.closest("[data-custom-work-index]");
     const field = event.target.dataset.customWorkField;
@@ -3612,7 +3894,33 @@ function bindEvents() {
     applyMinorChange("푸터 링크가 반영되었습니다.");
   });
 
+  $("#footer-link-list")?.addEventListener("change", () => {
+    renderFooterLinkList();
+  });
+
   document.addEventListener("click", (event) => {
+    const iconOption = event.target.closest("[data-icon-picker-value]");
+    if (iconOption) {
+      const picker = iconOption.closest("[data-icon-picker]");
+      const scope = picker?.dataset.iconPickerScope;
+      const selectedIcon = String(iconOption.dataset.iconPickerValue || "").trim();
+
+      if (scope === "contact-card") {
+        state.data.contact.primaryCard.icon = selectedIcon;
+        applyDataChange("문의 카드 아이콘이 반영되었습니다.");
+        return;
+      }
+
+      if (scope === "plan") {
+        const planIndex = Number(picker?.dataset.planIndex);
+        const plan = state.data.pricing.plans[planIndex];
+        if (!plan) return;
+        plan.icon = selectedIcon;
+        applyDataChange("가격 플랜 아이콘이 반영되었습니다.");
+        return;
+      }
+    }
+
     const moveButton = event.target.closest("[data-move-list]");
     if (moveButton) {
       const listKey = moveButton.dataset.moveList;

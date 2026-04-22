@@ -117,6 +117,7 @@
               <label class="field" for="site-title"><span>사이트 제목</span><input id="site-title" type="text"></label>
               <label class="field" for="site-description"><span>설명</span><input id="site-description" type="text"></label>
               <label class="field span-2" for="site-github-repo"><span>GitHub Repo</span><input id="site-github-repo" type="text" placeholder="owner/repo"></label>
+              <p class="field-note span-2" id="site-github-repo-note">GitHub Pages에서 열면 현재 repo를 자동으로 감지합니다.</p>
             </div>
           </section>
 
@@ -430,7 +431,7 @@
             </div>
           </section>
 
-          <section class="editor-card detail-section">
+          <section class="editor-card detail-section" id="works-category-order-section">
             <div class="section-row-head">
               <div>
                 <h3>카테고리 순서 / 제목 / 보조 정보</h3>
@@ -620,8 +621,12 @@
             <div class="form-grid">
               <label class="field" for="contact-card-label"><span>라벨</span><input id="contact-card-label" type="text"></label>
               <label class="field" for="contact-card-value"><span>값</span><input id="contact-card-value" type="text"></label>
-              <label class="field" for="contact-card-icon"><span>아이콘 이름</span><input id="contact-card-icon" type="text" placeholder="chat"></label>
               <label class="field" for="contact-card-href"><span>링크</span><input id="contact-card-href" type="text" placeholder="https://... 또는 비워두기"></label>
+              <div class="field span-2">
+                <span>아이콘 선택</span>
+                <input id="contact-card-icon" type="hidden">
+                <div id="contact-card-icon-picker"></div>
+              </div>
               <label class="field span-2" for="contact-card-note"><span>안내 문구</span><input id="contact-card-note" type="text"></label>
             </div>
           </section>
