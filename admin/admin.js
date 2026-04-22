@@ -1,6 +1,6 @@
 const jsonPath = "../data/site.json";
 const githubJsonPath = "data/site.json";
-const githubDefaultBranch = "gh-pages";
+const githubDefaultBranch = "main";
 const previewTargets = {
   brand: {
     title: "브랜드 / 내비 미리보기",
