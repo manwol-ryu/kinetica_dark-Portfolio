@@ -33,7 +33,7 @@
       "enabled": true,
       "linksEnabled": false,
       "title": "STUDIO J.Y",
-      "copy": "© 2026 STUDIO J.Y ㅣ만월 권리 보유\n\n",
+      "copy": "© 2026 STUDIO J.Y ㅣ만월 권리 보유 .\n\n",
       "links": [
         {
           "label": "GitHub Repo",
@@ -118,12 +118,7 @@
   },
   "stats": {
     "enabled": true,
-    "items": [
-      {
-        "value": "",
-        "label": ""
-      }
-    ]
+    "items": []
   },
   "works": {
     "sectionTitle": "",
