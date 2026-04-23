@@ -84,6 +84,7 @@
     "items": []
   },
   "works": {
+    "enabled": true,
     "sectionTitle": "",
     "sectionDescription": "",
     "emptyText": "영상 항목을 추가하면 이 영역이 자동으로 채워집니다.",

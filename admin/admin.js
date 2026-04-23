@@ -80,6 +80,7 @@ const DEFAULT_EMBED_META = {
   url: "",
   imageAlt: "영상 포트폴리오 템플릿 공유 이미지",
   twitterCard: "summary_large_image",
+  imageMetaEnabled: true,
 };
 
 const DEFAULT_DATA = {
@@ -168,6 +169,7 @@ const DEFAULT_DATA = {
     items: [],
   },
   works: {
+    enabled: true,
     sectionTitle: "영상 포트폴리오",
     sectionDescription: "",
     emptyText: "영상 항목을 추가하면 이 영역이 자동으로 채워집니다.",
@@ -350,6 +352,7 @@ const DIRECT_BINDINGS = {
 
 const CHECKBOX_BINDINGS = {
   "projects-enabled": ["projects", "enabled"],
+  "works-enabled": ["works", "enabled"],
   "stats-enabled": ["stats", "enabled"],
   "pricing-process-enabled": ["pricing", "processEnabled"],
   "pricing-custom-works-enabled": ["pricing", "customWorksEnabled"],
@@ -666,7 +669,7 @@ function resolveCurrentSiteBaseUrl(locationRef = window.location) {
 }
 
 function getDefaultEmbedMeta(locationRef = window.location, repoValue = state.data?.site?.githubRepo) {
-  const baseUrl = resolveCurrentSiteBaseUrl(locationRef) || resolveGitHubPagesBaseUrl(locationRef, repoValue);
+  const baseUrl = resolveGitHubPagesBaseUrl(locationRef, repoValue) || resolveCurrentSiteBaseUrl(locationRef);
   const site = state?.data?.site || DEFAULT_DATA.site;
   const title = compactText(site.title) || DEFAULT_EMBED_META.title;
   const description = compactText(site.description) || DEFAULT_EMBED_META.description;
@@ -975,7 +978,26 @@ function getHeroBackgroundMedia(value) {
 }
 
 function getProjectsFallbackHash() {
-  return state.data.projects?.enabled === false ? "#works" : "#projects";
+  return resolveVisibleHomeSectionHash("#projects");
+}
+
+function isProjectsSectionEnabled(data = state.data) {
+  return data.projects?.enabled !== false;
+}
+
+function isWorksSectionEnabled(data = state.data) {
+  return data.works?.enabled !== false;
+}
+
+function resolveVisibleHomeSectionHash(hash, data = state.data) {
+  const raw = String(hash || "").trim().toLowerCase();
+  const normalized = raw === "#work" ? "#works" : raw === "#project" ? "#projects" : raw;
+  if (normalized === "#projects" && isProjectsSectionEnabled(data)) return "#projects";
+  if (normalized === "#works" && isWorksSectionEnabled(data)) return "#works";
+  if (normalized === "#projects" && isWorksSectionEnabled(data)) return "#works";
+  if (normalized === "#works" && isProjectsSectionEnabled(data)) return "#projects";
+  if (normalized === "#stats" && data.stats?.enabled !== false) return "#stats";
+  return "#home";
 }
 
 function previewHiddenBlock(message) {
@@ -1517,6 +1539,7 @@ function normalizeData(input) {
     works: {
       ...base.works,
       ...(source.works || {}),
+      enabled: normalizeEnabled(source.works?.enabled, base.works.enabled),
       visualPreset: normalizeWorksVisualPreset(source.works?.visualPreset),
       displayMode: normalizeWorksDisplayMode(source.works?.displayMode),
       gridColumns: normalizeWorksColumnCount(source.works?.gridColumns, base.works.gridColumns),
@@ -1848,6 +1871,7 @@ function getEmptyEmbedMeta() {
     url: "",
     imageAlt: "",
     twitterCard: "summary_large_image",
+    imageMetaEnabled: true,
   };
 }
 
@@ -1858,21 +1882,37 @@ function buildEmbedHTML(meta = state.embedMeta) {
   const url = trimMetaUrl(meta.url);
   const imageAlt = normalizeMetaText(meta.imageAlt);
   const twitterCard = compactText(meta.twitterCard) || "summary_large_image";
+  const includeImageMeta = meta.imageMetaEnabled !== false;
 
-  return [
+  const lines = [
     "<!-- OG START -->",
     `<title>${escapeAttribute(title)}</title>`,
     metaTag("property", "og:title", title),
     metaTag("property", "og:description", description),
-    metaTag("property", "og:image", image),
-    metaTag("property", "og:url", url),
-    metaTag("property", "og:image:alt", imageAlt),
+  ];
+
+  if (includeImageMeta) {
+    lines.push(metaTag("property", "og:image", image));
+  }
+
+  lines.push(metaTag("property", "og:url", url));
+
+  if (includeImageMeta) {
+    lines.push(metaTag("property", "og:image:alt", imageAlt));
+  }
+
+  lines.push(
     metaTag("name", "twitter:card", twitterCard),
     metaTag("name", "twitter:title", title),
     metaTag("name", "twitter:description", description),
-    metaTag("name", "twitter:image", image),
-    "<!-- OG END -->",
-  ].join("\n");
+  );
+
+  if (includeImageMeta) {
+    lines.push(metaTag("name", "twitter:image", image));
+  }
+
+  lines.push("<!-- OG END -->");
+  return lines.join("\n");
 }
 
 function getMetaContent(doc, selector) {
@@ -1896,6 +1936,11 @@ function getFirstExistingMetaContent(doc, selectors) {
 function parseEmbedHTML(html) {
   const source = String(html || "");
   const doc = new DOMParser().parseFromString(`<head>${source}</head>`, "text/html");
+  const imageMetaEnabled = Boolean(doc.querySelector([
+    'meta[property="og:image"]',
+    'meta[name="twitter:image"]',
+    'meta[property="og:image:alt"]',
+  ].join(",")));
   const title = getExistingMetaContent(doc, 'meta[property="og:title"]')
     ?? normalizeMetaText(doc.querySelector("title")?.textContent);
   const description = getFirstExistingMetaContent(doc, [
@@ -1916,6 +1961,7 @@ function parseEmbedHTML(html) {
     url,
     imageAlt,
     twitterCard: getExistingMetaContent(doc, 'meta[name="twitter:card"]') || "summary_large_image",
+    imageMetaEnabled,
   };
 }
 
@@ -1935,6 +1981,7 @@ function fallbackEmbedBlockFromHTML(html) {
     image: getMetaContent(doc, 'meta[property="og:image"]') || defaults.image,
     url: getMetaContent(doc, 'meta[property="og:url"]') || defaults.url,
     imageAlt: getMetaContent(doc, 'meta[property="og:image:alt"]') || defaults.imageAlt,
+    imageMetaEnabled: true,
   };
   return buildEmbedHTML(meta);
 }
@@ -1946,10 +1993,12 @@ function shouldUseGeneratedEmbedUrl(value) {
 function normalizeLoadedEmbedHTML(html) {
   const meta = parseEmbedHTML(html);
   const defaults = getDefaultEmbedMeta();
+  const imageMetaEnabled = meta.imageMetaEnabled !== false;
   return buildEmbedHTML({
     ...meta,
     url: shouldUseGeneratedEmbedUrl(meta.url) ? defaults.url : meta.url,
-    image: shouldUseGeneratedEmbedUrl(meta.image) ? defaults.image : meta.image,
+    image: imageMetaEnabled && shouldUseGeneratedEmbedUrl(meta.image) ? defaults.image : meta.image,
+    imageMetaEnabled,
   });
 }
 
@@ -1965,12 +2014,39 @@ function syncEmbedFields(meta) {
     const input = document.getElementById(id);
     if (input) input.value = value || "";
   });
+  syncEmbedImageMetaControls(meta);
+}
+
+function syncEmbedImageMetaControls(meta = state.embedMeta) {
+  const enabled = meta.imageMetaEnabled !== false;
+  const toggle = $("#toggle-embed-image-meta");
+  if (toggle) {
+    toggle.textContent = enabled ? "이미지 제거" : "이미지 추가";
+    toggle.classList.toggle("danger-action", enabled);
+    toggle.classList.toggle("primary-action", !enabled);
+    toggle.setAttribute("aria-pressed", String(!enabled));
+  }
+
+  ["embed-meta-image", "embed-meta-image-alt"].forEach((id) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.disabled = !enabled;
+    input.closest(".field")?.classList.toggle("is-disabled", !enabled);
+  });
+
+  const note = $("#embed-image-meta-note");
+  if (note) {
+    note.textContent = enabled
+      ? "이미지 제거를 누르면 og:image, og:image:alt, twitter:image 줄이 HTML 코드에서 삭제됩니다."
+      : "이미지 메타데이터가 제거된 상태입니다. 이미지 추가를 누르면 GitHub Pages의 assets/social-preview.png 링크로 다시 생성됩니다.";
+  }
 }
 
 function renderEmbedPreview(meta = state.embedMeta) {
+  const imageMetaEnabled = meta.imageMetaEnabled !== false;
   const title = normalizeMetaText(meta.title);
   const description = normalizeMetaText(meta.description);
-  const image = trimMetaUrl(meta.image);
+  const image = imageMetaEnabled ? trimMetaUrl(meta.image) : "";
   const url = trimMetaUrl(meta.url);
   const domain = (() => {
     try {
@@ -1993,7 +2069,9 @@ function renderEmbedPreview(meta = state.embedMeta) {
       imageElement.hidden = true;
       imageElement.removeAttribute("src");
       imageEmpty.hidden = false;
-      imageEmpty.textContent = "이미지 URL을 입력하면 이곳에 표시됩니다.";
+      imageEmpty.textContent = imageMetaEnabled
+        ? "이미지 URL을 입력하면 이곳에 표시됩니다."
+        : "이미지 메타데이터가 제거되어 카드 이미지를 표시하지 않습니다.";
     }
   }
 
@@ -2028,8 +2106,31 @@ function syncEmbedEditorFromFields() {
     image: $("#embed-meta-image")?.value || "",
     url: $("#embed-meta-url")?.value || "",
     imageAlt: $("#embed-meta-image-alt")?.value || "",
+    imageMetaEnabled: state.embedMeta.imageMetaEnabled !== false,
   };
   const html = buildEmbedHTML(meta);
+  const output = $("#embed-html-output");
+  if (output) output.value = html;
+  syncEmbedEditorFromHTML(html);
+}
+
+function toggleEmbedImageMeta() {
+  const enabled = state.embedMeta.imageMetaEnabled !== false;
+  const defaults = getDefaultEmbedMeta();
+  const nextMeta = {
+    ...state.embedMeta,
+    imageMetaEnabled: !enabled,
+  };
+
+  if (enabled) {
+    nextMeta.image = "";
+    nextMeta.imageAlt = "";
+  } else {
+    nextMeta.image = defaults.image;
+    nextMeta.imageAlt = defaults.imageAlt;
+  }
+
+  const html = buildEmbedHTML(nextMeta);
   const output = $("#embed-html-output");
   if (output) output.value = html;
   syncEmbedEditorFromHTML(html);
@@ -3262,6 +3363,14 @@ function buildStatsPreview() {
 
 function buildWorksPreview() {
   const works = state.data.works || DEFAULT_DATA.works;
+  if (works.enabled === false) {
+    return `
+      <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
+        <div class="mx-auto max-w-screen-2xl">${previewHiddenBlock("영상 포트폴리오 섹션이 꺼져 있습니다.")}</div>
+      </section>
+    `;
+  }
+
   const visualPreset = normalizeWorksVisualPreset(works.visualPreset);
   const displayTitle = String(works.sectionTitle || "").trim() || DEFAULT_DATA.works.sectionTitle || "영상 포트폴리오";
   const hasSectionShell = Boolean(displayTitle || String(works.sectionDescription || "").trim() || works.videos.length);
@@ -3603,10 +3712,19 @@ function renderNavLinkList() {
 }
 
 function hasNavLinkPreset(preset) {
+  const presetHref = normalizeNavPresetHrefForCompare(preset.href);
   return state.data.site.nav.links.some((link) => (
     String(link?.label || "").trim() === preset.label &&
-    String(link?.href || "").trim() === preset.href
+    normalizeNavPresetHrefForCompare(link?.href) === presetHref
   ));
+}
+
+function normalizeNavPresetHrefForCompare(href) {
+  const raw = String(href || "").trim();
+  const match = raw.match(/^(?:\.\/)?(?:index\.html)?(#[\w-]+)$/i);
+  if (!match) return raw;
+  const hash = match[1].toLowerCase() === "#work" ? "#works" : match[1].toLowerCase();
+  return `index.html${hash}`;
 }
 
 function renderNavLinkPresetButtons() {
@@ -3628,6 +3746,57 @@ function renderNavLinkPresetButtons() {
   `).join("");
 
   container.innerHTML = `${allButton}${presetButtons}`;
+}
+
+function getScenarioSectionHref(hash, scenario, fromOtherPage = false) {
+  const data = {
+    ...state.data,
+    projects: {
+      ...state.data.projects,
+      enabled: scenario.projectsEnabled,
+    },
+    works: {
+      ...state.data.works,
+      enabled: scenario.worksEnabled,
+    },
+  };
+  const target = resolveVisibleHomeSectionHash(hash, data);
+  return fromOtherPage ? `index.html${target}` : target;
+}
+
+function renderNavTestSession() {
+  const container = $("#nav-test-session-list");
+  if (!container) return;
+
+  const currentProjectsEnabled = isProjectsSectionEnabled();
+  const currentWorksEnabled = isWorksSectionEnabled();
+  const quickPresetState = NAV_LINK_QUICK_PRESETS.every((preset) => hasNavLinkPreset(preset))
+    ? "기본 4개가 모두 추가된 상태"
+    : "빠른 추가 버튼으로 기본 4개 추가 가능";
+  const scenarios = [
+    { projectsEnabled: true, worksEnabled: true },
+    { projectsEnabled: true, worksEnabled: false },
+    { projectsEnabled: false, worksEnabled: true },
+    { projectsEnabled: false, worksEnabled: false },
+  ];
+
+  container.innerHTML = scenarios.map((scenario) => {
+    const isCurrent = scenario.projectsEnabled === currentProjectsEnabled && scenario.worksEnabled === currentWorksEnabled;
+    const projectHref = getScenarioSectionHref("#projects", scenario);
+    const worksHref = getScenarioSectionHref("#works", scenario);
+    const otherPageWorksHref = getScenarioSectionHref("#works", scenario, true);
+    const projectLabel = scenario.projectsEnabled ? "프로젝트 ON" : "프로젝트 OFF";
+    const worksLabel = scenario.worksEnabled ? "영상 포트폴리오 ON" : "영상 포트폴리오 OFF";
+    return `
+      <article class="nav-test-card ${isCurrent ? "is-current" : ""}">
+        <h4>${escapeHTML(projectLabel)} / ${escapeHTML(worksLabel)}${isCurrent ? " · 현재 설정" : ""}</h4>
+        <p>프로젝트 링크 예상 이동: <code>${escapeHTML(projectHref)}</code></p>
+        <p>영상 포트폴리오 링크 예상 이동: <code>${escapeHTML(worksHref)}</code></p>
+        <p>다른 페이지에서 영상 포트폴리오 클릭: <code>${escapeHTML(otherPageWorksHref)}</code></p>
+        <p>빠른 추가 테스트: ${escapeHTML(quickPresetState)}</p>
+      </article>
+    `;
+  }).join("");
 }
 
 function addNavLinkPreset(presetKey) {
@@ -4439,6 +4608,7 @@ function renderAll() {
   renderSummary();
   renderNavLinkList();
   renderNavLinkPresetButtons();
+  renderNavTestSession();
   renderHeroActionList();
   renderHeroInfoEditors();
   renderProjectCardList();
@@ -4498,6 +4668,8 @@ function applyMinorChange(message = "변경 사항이 반영되었습니다.") {
   renderSummary();
   renderWorksDisplaySettings();
   renderWorksCategoryOrderList();
+  renderNavLinkPresetButtons();
+  renderNavTestSession();
   refreshJsonOutput();
   renderLivePreview();
   setStatus(message, "success");
@@ -4747,6 +4919,7 @@ function bindEvents() {
   $("#open-github-json")?.addEventListener("click", openGitHubJson);
   $("#reload-embed-html")?.addEventListener("click", () => loadEmbedHTMLFromIndex({ force: true }));
   $("#copy-embed-html")?.addEventListener("click", copyEmbedHTML);
+  $("#toggle-embed-image-meta")?.addEventListener("click", toggleEmbedImageMeta);
   $("#open-assets-upload")?.addEventListener("click", openAssetsUploadPage);
   $("#download-social-preview")?.addEventListener("click", downloadSocialPreviewPNG);
 

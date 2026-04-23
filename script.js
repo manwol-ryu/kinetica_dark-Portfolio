@@ -84,6 +84,7 @@ const DEFAULT_DATA = {
     items: [],
   },
   works: {
+    enabled: true,
     sectionTitle: "영상 포트폴리오",
     sectionDescription: "",
     emptyText: "영상 항목을 추가하면 이 영역이 자동으로 채워집니다.",
@@ -181,6 +182,14 @@ const worksFilterState = {
 };
 const previewStorageKey = "portfolio-template-admin-preview-data";
 const previewMessageType = "portfolio-template-preview-data";
+const homeSectionHashMap = new Map([
+  ["#home", "#home"],
+  ["#project", "#projects"],
+  ["#projects", "#projects"],
+  ["#work", "#works"],
+  ["#works", "#works"],
+  ["#stats", "#stats"],
+]);
 
 function $(selector) {
   return document.querySelector(selector);
@@ -663,6 +672,7 @@ function normalizeData(input) {
     works: {
       ...clone(DEFAULT_DATA.works),
       ...(source.works || {}),
+      enabled: normalizeEnabled(source.works?.enabled, DEFAULT_DATA.works.enabled),
       visualPreset: normalizeWorksVisualPreset(source.works?.visualPreset),
       displayMode: normalizeWorksDisplayMode(source.works?.displayMode),
       gridColumns: normalizeWorksColumnCount(source.works?.gridColumns, DEFAULT_DATA.works.gridColumns),
@@ -768,7 +778,30 @@ function resolveHref(href) {
 }
 
 function getProjectsFallbackHash() {
-  return DATA.projects?.enabled === false ? "#works" : "#projects";
+  return resolveVisibleHomeSectionHash("#projects");
+}
+
+function normalizeHomeSectionHash(hash) {
+  const normalized = String(hash || "").trim().toLowerCase();
+  return homeSectionHashMap.get(normalized) || normalized;
+}
+
+function isProjectsSectionEnabled(data = DATA) {
+  return data.projects?.enabled !== false;
+}
+
+function isWorksSectionEnabled(data = DATA) {
+  return data.works?.enabled !== false;
+}
+
+function resolveVisibleHomeSectionHash(hash, data = DATA) {
+  const normalized = normalizeHomeSectionHash(hash);
+  if (normalized === "#projects" && isProjectsSectionEnabled(data)) return "#projects";
+  if (normalized === "#works" && isWorksSectionEnabled(data)) return "#works";
+  if (normalized === "#projects" && isWorksSectionEnabled(data)) return "#works";
+  if (normalized === "#works" && isProjectsSectionEnabled(data)) return "#projects";
+  if (normalized === "#stats" && data.stats?.enabled !== false) return "#stats";
+  return normalized === "#home" ? "#home" : "#home";
 }
 
 function rewriteProjectsHref(href) {
@@ -794,8 +827,40 @@ function rewriteProjectsHref(href) {
   }
 }
 
-function resolvePreviewAwareHref(href) {
+function resolveIndexSectionHref(href) {
   const resolved = rewriteProjectsHref(href);
+  if (!resolved || resolved.startsWith("mailto:") || resolved.startsWith("tel:") || isExternalHref(resolved)) return resolved;
+
+  if (resolved.startsWith("#")) {
+    const normalizedHash = normalizeHomeSectionHash(resolved);
+    if (!homeSectionHashMap.has(normalizedHash)) return resolved;
+    const hash = resolveVisibleHomeSectionHash(normalizedHash);
+    return currentPageName() === "index.html" ? hash : `index.html${hash}`;
+  }
+
+  try {
+    const url = new URL(resolved, window.location.href);
+    if (url.origin !== window.location.origin) return resolved;
+
+    const lastSegment = url.pathname.split("/").filter(Boolean).pop() || "";
+    const page = !lastSegment || !lastSegment.includes(".") ? "index.html" : lastSegment.toLowerCase();
+    const normalizedHash = normalizeHomeSectionHash(url.hash);
+    if (page !== "index.html" || !homeSectionHashMap.has(normalizedHash)) return resolved;
+    const hash = resolveVisibleHomeSectionHash(normalizedHash);
+
+    url.hash = hash;
+    const currentUrl = new URL(window.location.href);
+    if (currentUrl.origin === url.origin && currentUrl.pathname === url.pathname) {
+      return hash;
+    }
+    return `index.html${hash}`;
+  } catch (error) {
+    return resolved;
+  }
+}
+
+function resolvePreviewAwareHref(href) {
+  const resolved = resolveIndexSectionHref(href);
   if (!resolved || !isAdminPreview()) return resolved;
   if (resolved.startsWith("#") || resolved.startsWith("mailto:") || resolved.startsWith("tel:")) return resolved;
   if (isExternalHref(resolved)) return resolved;
@@ -963,7 +1028,9 @@ function setDesktopNavActiveState(links, predicate) {
 
 function getIndexNavProgress() {
   const homeSection = document.getElementById("home");
-  const targetSection = document.getElementById(DATA.projects?.enabled === false ? "works" : "projects");
+  const targetHash = getProjectsFallbackHash();
+  if (targetHash === "#home") return null;
+  const targetSection = document.getElementById(targetHash.slice(1));
   if (!homeSection || !targetSection || targetSection.hidden) return null;
 
   const headerHeight = document.querySelector("header")?.offsetHeight || 0;
@@ -1468,6 +1535,15 @@ function renderWorks() {
   const categories = getOrderedWorksCategories(rawVideos, works.categoryOrder);
 
   section.dataset.visualPreset = visualPreset;
+
+  if (works.enabled === false) {
+    setHidden(section, true);
+    grid.innerHTML = "";
+    groups.innerHTML = "";
+    filters.innerHTML = "";
+    empty.textContent = "";
+    return;
+  }
 
   setHidden(section, !hasSectionContent);
   if (!hasSectionContent) {
