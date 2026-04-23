@@ -39,8 +39,8 @@ const DEFAULT_DATA = {
     title: "브랜드에 맞는\n영상 포트폴리오를 시작하세요.",
     titleAccent: "영상 포트폴리오",
     description: "JSON 데이터만 교체하면 소개 문구, 작업물, 가격, 문의 섹션을 프로젝트에 맞게 빠르게 구성할 수 있습니다.",
-    statusLabel: "Status",
-    statusText: "READY FOR CUSTOMIZATION",
+    statusLabel: "",
+    statusText: "",
     actions: [
       {
         label: "가격 보기",
@@ -84,9 +84,10 @@ const DEFAULT_DATA = {
     items: [],
   },
   works: {
-    sectionTitle: "",
+    sectionTitle: "영상 포트폴리오",
     sectionDescription: "",
     emptyText: "영상 항목을 추가하면 이 영역이 자동으로 채워집니다.",
+    visualPreset: "reference",
     displayMode: "grid",
     gridColumns: 3,
     categoryStackColumns: 2,
@@ -100,6 +101,8 @@ const DEFAULT_DATA = {
     sectionEyebrow: "Pricing Template",
     title: "서비스 구조를 바로 안내할 수 있게 준비해두세요.",
     description: "패키지, 포함 항목, 문의 CTA를 예시로 남겨두었습니다. 프로젝트에 맞게 값만 교체하면 됩니다.",
+    gridColumns: 2,
+    processStyle: "cards",
     plans: [
       {
         slug: "starter",
@@ -237,6 +240,12 @@ function normalizeWorksDisplayMode(value) {
   return value === "category-stack" ? "category-stack" : "grid";
 }
 
+function normalizeWorksVisualPreset(value) {
+  return ["reference", "panel", "minimal"].includes(String(value || "").trim())
+    ? String(value).trim()
+    : "reference";
+}
+
 function normalizeWorksColumnCount(value, fallback) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 8 ? parsed : fallback;
@@ -252,6 +261,17 @@ function normalizePricingPlanDesign(value, fallback = "shortform") {
   const normalized = String(value || "").trim();
   if (normalized === "longform" || normalized === "shortform") return normalized;
   return fallback === "longform" ? "longform" : "shortform";
+}
+
+function normalizePricingGridColumns(value, fallback) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 4 ? parsed : fallback;
+}
+
+function normalizePricingProcessStyle(value) {
+  return ["cards", "minimal", "editorial"].includes(String(value || "").trim())
+    ? String(value).trim()
+    : "cards";
 }
 
 function normalizeWorksCategoryOrder(items, videos) {
@@ -641,6 +661,7 @@ function normalizeData(input) {
     works: {
       ...clone(DEFAULT_DATA.works),
       ...(source.works || {}),
+      visualPreset: normalizeWorksVisualPreset(source.works?.visualPreset),
       displayMode: normalizeWorksDisplayMode(source.works?.displayMode),
       gridColumns: normalizeWorksColumnCount(source.works?.gridColumns, DEFAULT_DATA.works.gridColumns),
       categoryStackColumns: normalizeWorksColumnCount(source.works?.categoryStackColumns, DEFAULT_DATA.works.categoryStackColumns),
@@ -653,6 +674,8 @@ function normalizeData(input) {
     pricing: {
       ...clone(DEFAULT_DATA.pricing),
       ...(source.pricing || {}),
+      gridColumns: normalizePricingGridColumns(source.pricing?.gridColumns, DEFAULT_DATA.pricing.gridColumns),
+      processStyle: normalizePricingProcessStyle(source.pricing?.processStyle),
       customWorksEnabled: normalizeEnabled(source.pricing?.customWorksEnabled, DEFAULT_DATA.pricing.customWorksEnabled),
       processEnabled: normalizeEnabled(source.pricing?.processEnabled, DEFAULT_DATA.pricing.processEnabled),
       plans: Array.isArray(source.pricing?.plans)
@@ -680,7 +703,7 @@ function normalizeData(input) {
             number: String(step?.number || "").trim(),
             title: String(step?.title || "").trim(),
             description: String(step?.description || "").trim(),
-          })).filter((step) => step.title || step.description)
+          })).filter((step) => step.number || step.title || step.description)
         : [],
     },
     contact: {
@@ -829,6 +852,11 @@ function renderAccentText(text, accent, accentClass) {
 function setText(id, value) {
   const element = document.getElementById(id);
   if (element) element.textContent = String(value || "");
+}
+
+function setHTMLWithBreaks(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.innerHTML = escapeWithBreaks(value);
 }
 
 function setHidden(element, shouldHide) {
@@ -1175,7 +1203,7 @@ function renderHero() {
   }
   setText("hero-status-label", DATA.hero.statusLabel);
   setText("hero-status-text", DATA.hero.statusText);
-  setHidden($("#hero-status"), !(DATA.hero.statusLabel || DATA.hero.statusText));
+  setHidden($("#hero-status"), !(String(DATA.hero.statusLabel || "").trim() || String(DATA.hero.statusText || "").trim()));
 
   const actions = $("#hero-actions");
   if (actions) {
@@ -1421,13 +1449,17 @@ function renderWorks() {
 
   const works = DATA.works || DEFAULT_DATA.works;
   const rawVideos = Array.isArray(works.videos) ? works.videos : [];
+  const visualPreset = normalizeWorksVisualPreset(works.visualPreset);
   const sectionTitle = String(works.sectionTitle || "").trim();
   const sectionDescription = String(works.sectionDescription || "").trim();
+  const displayTitle = sectionTitle || DEFAULT_DATA.works.sectionTitle || "영상 포트폴리오";
   const emptyText = String(works.emptyText || DEFAULT_DATA.works.emptyText || "").trim();
   const displayMode = normalizeWorksDisplayMode(works.displayMode);
-  const hasSectionContent = Boolean(sectionTitle || sectionDescription || rawVideos.length);
+  const hasSectionContent = Boolean(displayTitle || sectionDescription || rawVideos.length);
   const hasShortVideos = rawVideos.some((video) => video.type === "short");
   const categories = getOrderedWorksCategories(rawVideos, works.categoryOrder);
+
+  section.dataset.visualPreset = visualPreset;
 
   setHidden(section, !hasSectionContent);
   if (!hasSectionContent) {
@@ -1438,8 +1470,8 @@ function renderWorks() {
     return;
   }
 
-  title.textContent = sectionTitle;
-  description.textContent = sectionDescription;
+  title.textContent = displayTitle;
+  description.innerHTML = escapeWithBreaks(sectionDescription);
   setHidden(description, !sectionDescription);
 
   if (!["all", "long", "short"].includes(worksFilterState.type)) {
@@ -1550,21 +1582,68 @@ function chunkProcessSteps(steps) {
   return rows;
 }
 
-function renderProcessGrid(steps) {
+function getProcessStepDisplayNumber(step, index) {
+  const value = String(step?.number || "").trim();
+  return value || String(index + 1).padStart(2, "0");
+}
+
+function renderProcessRows(steps, variant) {
+  return chunkProcessSteps(steps).map((row, rowIndex) => `
+    <div class="process-grid-row" data-columns="${row.length}">
+      ${row.map((step, index) => {
+        const stepIndex = rowIndex * 4 + index;
+        const title = String(step.title || "").trim() || `단계 ${stepIndex + 1}`;
+        const description = String(step.description || "").trim();
+
+        return `
+          <article class="process-step-card" data-variant="${escapeHTML(variant)}" data-step-index="${stepIndex + 1}">
+            <div class="process-step-top">
+              <div class="process-step-number-wrap">
+                <div class="process-step-number">${escapeHTML(getProcessStepDisplayNumber(step, stepIndex))}</div>
+                <span class="process-step-rule" aria-hidden="true"></span>
+              </div>
+              <h4 class="process-step-title">${escapeHTML(title)}</h4>
+            </div>
+            ${description ? `<p class="process-step-copy">${escapeWithBreaks(description)}</p>` : ""}
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `).join("");
+}
+
+function renderEditorialProcess(steps) {
+  return `
+    <div class="process-editorial-list">
+      ${steps.map((step, index) => {
+        const title = String(step.title || "").trim() || `단계 ${index + 1}`;
+        const description = String(step.description || "").trim();
+
+        return `
+          <article class="process-editorial-step" data-step-index="${index + 1}">
+            <div class="process-editorial-number">${escapeHTML(getProcessStepDisplayNumber(step, index))}</div>
+            <div class="process-editorial-body">
+              <span class="process-editorial-kicker">Step ${String(index + 1).padStart(2, "0")}</span>
+              <h4 class="process-step-title">${escapeHTML(title)}</h4>
+              ${description ? `<p class="process-step-copy">${escapeWithBreaks(description)}</p>` : ""}
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderProcessGrid(steps, style) {
   const visibleSteps = (Array.isArray(steps) ? steps : []).filter((step) => step.number || step.title || step.description);
   if (!visibleSteps.length) return "";
 
-  return chunkProcessSteps(visibleSteps).map((row) => `
-    <div class="process-grid-row" data-columns="${row.length}">
-      ${row.map((step) => `
-        <article class="process-step-card">
-          <div class="process-step-number">${escapeHTML(step.number)}</div>
-          <h4 class="process-step-title">${escapeHTML(step.title)}</h4>
-          <p class="process-step-copy">${escapeHTML(step.description)}</p>
-        </article>
-      `).join("")}
-    </div>
-  `).join("");
+  const processStyle = normalizePricingProcessStyle(style);
+  if (processStyle === "editorial") {
+    return renderEditorialProcess(visibleSteps);
+  }
+
+  return renderProcessRows(visibleSteps, processStyle);
 }
 
 function renderCustomWorkBlocks(blocks) {
@@ -1579,7 +1658,7 @@ function renderCustomWorkBlocks(blocks) {
       <article class="custom-work-block" data-direction="${direction}">
         <section class="custom-work-copy">
           <h2 class="custom-work-title">${escapeHTML(block.title)}</h2>
-          <p class="custom-work-description">${escapeHTML(block.description)}</p>
+          <p class="custom-work-description">${escapeWithBreaks(block.description)}</p>
           <div class="custom-work-divider">
             <span class="custom-work-highlight">${escapeHTML(block.highlight)}</span>
             <span class="custom-work-line" aria-hidden="true"></span>
@@ -1593,7 +1672,7 @@ function renderCustomWorkBlocks(blocks) {
           <div class="custom-work-media-overlay"></div>
           <div class="custom-work-caption-wrap">
             <div class="custom-work-eyebrow">${escapeHTML(block.eyebrow)}</div>
-            <div class="custom-work-caption">${escapeHTML(caption)}</div>
+            <div class="custom-work-caption">${escapeWithBreaks(caption)}</div>
           </div>
         </section>
       </article>
@@ -1604,10 +1683,11 @@ function renderCustomWorkBlocks(blocks) {
 function renderPricing() {
   setText("pricing-eyebrow", DATA.pricing.sectionEyebrow);
   setText("pricing-title", DATA.pricing.title);
-  setText("pricing-description", DATA.pricing.description);
+  setHTMLWithBreaks("pricing-description", DATA.pricing.description);
 
   const plans = $("#pricing-plans");
   if (plans) {
+    plans.dataset.columns = String(normalizePricingGridColumns(DATA.pricing.gridColumns, DEFAULT_DATA.pricing.gridColumns));
     plans.innerHTML = DATA.pricing.plans.map((plan) => {
       const href = resolvePreviewAwareHref(plan.cta?.href);
       const external = isExternalHref(href) ? ' target="_blank" rel="noopener"' : "";
@@ -1623,8 +1703,8 @@ function renderPricing() {
             ${plan.icon ? `<span class="material-symbols-outlined text-4xl text-primary-container">${escapeHTML(plan.icon)}</span>` : ""}
             ${!highlighted && plan.badge ? "" : ""}
           </div>
-          <h3 class="mb-2 text-3xl font-bold ${highlighted ? "text-primary-container" : ""}">${escapeHTML(plan.title)}</h3>
-          <p class="mb-8 text-sm leading-relaxed text-on-surface-variant">${escapeHTML(plan.description)}</p>
+          <h3 class="plan-card-title mb-2 text-3xl font-bold ${highlighted ? "text-primary-container" : ""}">${escapeWithBreaks(plan.title)}</h3>
+          <p class="plan-card-description mb-8 text-sm leading-relaxed text-on-surface-variant">${escapeWithBreaks(plan.description)}</p>
           <ul class="mb-12 space-y-4">
             ${plan.features.map((feature) => `
               <li class="flex items-center gap-3 text-sm">
@@ -1657,8 +1737,12 @@ function renderPricing() {
   setText("process-title", DATA.pricing.processTitle);
   const processGrid = $("#process-grid");
   const processSection = $("#process-section");
+  const processStyle = normalizePricingProcessStyle(DATA.pricing.processStyle);
+  if (processSection) {
+    processSection.dataset.processStyle = processStyle;
+  }
   if (processGrid) {
-    processGrid.innerHTML = renderProcessGrid(DATA.pricing.processSteps);
+    processGrid.innerHTML = renderProcessGrid(DATA.pricing.processSteps, processStyle);
   }
   const hasProcessContent = (DATA.pricing.processSteps || []).some((step) => step.number || step.title || step.description)
     || Boolean(DATA.pricing.processTitle);
@@ -1671,7 +1755,7 @@ function renderContact() {
   if (title) {
     title.innerHTML = renderAccentText(DATA.contact.title, DATA.contact.titleAccent, "text-primary-container");
   }
-  setText("contact-description", DATA.contact.description);
+  setHTMLWithBreaks("contact-description", DATA.contact.description);
 
   const primary = $("#contact-primary-card");
   if (primary) {
@@ -1727,7 +1811,7 @@ function renderFooter() {
   if (DATA.site.footer.enabled === false) return;
 
   setText("footer-title", DATA.site.footer.title);
-  setText("footer-copy", DATA.site.footer.copy);
+  setHTMLWithBreaks("footer-copy", DATA.site.footer.copy);
 
   const links = $("#footer-links");
   if (links) {

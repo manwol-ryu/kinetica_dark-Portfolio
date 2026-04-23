@@ -9,6 +9,8 @@
 3. 생성한 내용을 `data/site.json`에 반영합니다.
 4. 정적 페이지인 `index.html`, `pricing.html`, `contact.html`에서 결과를 확인합니다.
 
+관리자 화면의 `GitHub site.json 열기` 버튼은 현재 저장소의 기본 브랜치를 GitHub API로 확인한 뒤 해당 브랜치의 `data/site.json`으로 연결합니다. 기본 브랜치를 아직 확인하지 못한 경우에는 우선 `main` 기준으로 동작합니다.
+
 ## 템플릿 기본값
 
 - 기본 브랜드: `studio / your-name`

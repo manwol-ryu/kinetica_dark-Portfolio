@@ -4,7 +4,27 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-source_branch="${1:-main}"
+detect_remote_default_branch() {
+  local remote_name="${1:-origin}"
+  local remote_head=""
+
+  remote_head="$(git symbolic-ref --quiet --short "refs/remotes/${remote_name}/HEAD" 2>/dev/null || true)"
+  remote_head="${remote_head#${remote_name}/}"
+
+  if [[ -n "$remote_head" ]]; then
+    printf '%s\n' "$remote_head"
+    return
+  fi
+
+  remote_head="$(git ls-remote --symref "$remote_name" HEAD 2>/dev/null | awk '/^ref:/ { sub("refs/heads/", "", $2); print $2; exit }' || true)"
+
+  if [[ -n "$remote_head" ]]; then
+    printf '%s\n' "$remote_head"
+  fi
+}
+
+default_source_branch="$(detect_remote_default_branch)"
+source_branch="${1:-${default_source_branch:-main}}"
 target_branch="${2:-gh-pages}"
 json_path="data/site.json"
 

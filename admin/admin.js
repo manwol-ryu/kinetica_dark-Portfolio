@@ -1,6 +1,6 @@
 const jsonPath = "../data/site.json";
 const githubJsonPath = "data/site.json";
-const githubDefaultBranch = "gh-pages";
+const fallbackGitHubBranch = "main";
 const previewTargets = {
   brand: {
     title: "브랜드 / 내비 미리보기",
@@ -62,7 +62,7 @@ const DEFAULT_DATA = {
   site: {
     title: "영상 포트폴리오 템플릿",
     description: "영상 편집자와 크리에이터를 위한 정적 포트폴리오 템플릿입니다. site.json만 수정해 브랜드, 작업물, 가격, 문의 정보를 구성할 수 있습니다.",
-    githubRepo: "",
+    githubRepo: "manwol-ryu/kinetica_dark-Portfolio",
     brand: {
       prefix: "studio",
       name: "your-name",
@@ -99,8 +99,8 @@ const DEFAULT_DATA = {
     title: "브랜드에 맞는\n영상 포트폴리오를 시작하세요.",
     titleAccent: "영상 포트폴리오",
     description: "JSON 데이터만 교체하면 소개 문구, 작업물, 가격, 문의 섹션을 프로젝트에 맞게 빠르게 구성할 수 있습니다.",
-    statusLabel: "Status",
-    statusText: "READY FOR CUSTOMIZATION",
+    statusLabel: "",
+    statusText: "",
     actions: [
       {
         label: "가격 보기",
@@ -144,9 +144,10 @@ const DEFAULT_DATA = {
     items: [],
   },
   works: {
-    sectionTitle: "",
+    sectionTitle: "영상 포트폴리오",
     sectionDescription: "",
     emptyText: "영상 항목을 추가하면 이 영역이 자동으로 채워집니다.",
+    visualPreset: "reference",
     displayMode: "grid",
     gridColumns: 3,
     categoryStackColumns: 2,
@@ -160,6 +161,8 @@ const DEFAULT_DATA = {
     sectionEyebrow: "Pricing Template",
     title: "서비스 구조를 바로 안내할 수 있게 준비해두세요.",
     description: "패키지, 포함 항목, 문의 CTA를 예시로 남겨두었습니다. 프로젝트에 맞게 값만 교체하면 됩니다.",
+    gridColumns: 2,
+    processStyle: "cards",
     plans: [
       {
         slug: "starter",
@@ -226,7 +229,49 @@ const state = {
   metadataRequestId: 0,
   lastMetadataVideoId: "",
   worksFormVideoId: "",
+  githubDefaultBranch: fallbackGitHubBranch,
+  githubDefaultBranchRepo: "",
+  githubDefaultBranchSource: "fallback",
+  githubBranchRequestId: 0,
+  githubBranchTimer: null,
 };
+
+const NAV_LINK_QUICK_PRESETS = Object.freeze([
+  { key: "home", label: "홈", href: "index.html#home" },
+  { key: "works", label: "영상 포트폴리오", href: "index.html#works" },
+  { key: "pricing", label: "서비스 및 가격", href: "pricing.html" },
+  { key: "contact", label: "문의하기", href: "contact.html" },
+]);
+
+function getNavLinkPresetOrderIndex(link) {
+  const label = String(link?.label || "").trim();
+  const href = String(link?.href || "").trim();
+  return NAV_LINK_QUICK_PRESETS.findIndex((preset) => (
+    preset.label === label &&
+    preset.href === href
+  ));
+}
+
+function sortNavLinksByPresetOrder(links) {
+  return (Array.isArray(links) ? links : [])
+    .map((link, index) => ({
+      link,
+      index,
+      presetIndex: getNavLinkPresetOrderIndex(link),
+    }))
+    .sort((left, right) => {
+      const leftIsPreset = left.presetIndex !== -1;
+      const rightIsPreset = right.presetIndex !== -1;
+
+      if (leftIsPreset && rightIsPreset) {
+        return left.presetIndex - right.presetIndex;
+      }
+      if (leftIsPreset) return -1;
+      if (rightIsPreset) return 1;
+      return left.index - right.index;
+    })
+    .map(({ link }) => link);
+}
 
 const DIRECT_BINDINGS = {
   "site-title": ["site", "title"],
@@ -310,110 +355,114 @@ const MATERIAL_ICON_OPTIONS = Object.freeze([
   { value: "person", label: "개인", keywords: "person creator individual 개인 크리에이터" },
 ]);
 
+function toolPresetAsset(fileName) {
+  return `assets/tool-presets/${fileName}`;
+}
+
 const HERO_TOOL_PRESETS = Object.freeze({
   "premiere-pro": {
     name: "Premiere Pro",
-    logoUrl: "https://i.namu.wiki/i/Ij7VsOqUO-M0A1wkmGU3M3lL98IoQjm1_WWSaaKf3bThbZ5iml-pY3Totigp0p-IjbzTQ0sAGPqMxjugufdZUA.svg",
+    logoUrl: toolPresetAsset("premiere-pro.svg"),
     logoAlt: "Premiere Pro logo",
   },
   "after-effects": {
     name: "After Effects",
-    logoUrl: "https://i.namu.wiki/i/5ffo6UVBxthL_LEs62YVBnlFXkWaHSJ3H827dYMXrYbSS2DvU9LKJ4J26vv0s9qkQtfuGiBf92xtvhrxnILI6w.svg",
+    logoUrl: toolPresetAsset("after-effects.svg"),
     logoAlt: "After Effects logo",
   },
   "photoshop": {
     name: "Photoshop",
-    logoUrl: "https://i.namu.wiki/i/utkZKZsqgX2lN8bVgT6iAhkVQgGSTVlpzhqXPf0ATuiqYpEGq6rhGq2SPMElqlrngMTowqBLd8ywzgv4VpKdHg.svg",
+    logoUrl: toolPresetAsset("photoshop.svg"),
     logoAlt: "Photoshop logo",
   },
   "illustrator": {
     name: "Illustrator",
-    logoUrl: "https://i.namu.wiki/i/HmMUGgd5edIAGWNHV-n8dn2Hz5gXLT7MhvtJI7ODQWEkqQa4U1AugsKgQ2VhxeFXhftf3W2w1b8-hCgf3U1iYQ.svg",
+    logoUrl: toolPresetAsset("illustrator.svg"),
     logoAlt: "Illustrator logo",
   },
   "lightroom": {
     name: "Lightroom",
-    logoUrl: "https://i.namu.wiki/i/SBo3OFGdz8GIufgSI5H_RFGDaS9JKHSneRtpTDVRbTs8N42ducnUETlRaeWRypsQUOBtO8FN3gbXEBm5EE8sPvofA3oNBdTDljEo9kR9nBW6j_QlUjhQZloau_2sNFE2IDgrd_2DBEeFagHYGQBlXw.svg",
+    logoUrl: toolPresetAsset("lightroom.svg"),
     logoAlt: "Lightroom logo",
   },
   "animate": {
     name: "Animate",
-    logoUrl: "https://i.namu.wiki/i/94mx5IKH4gtk37eko8wznmpj-BFTX9wRi7ele5UYLcASJ2dKmJMT3by_r_hmxpLHyFsGaSt3NzQ9Gu8UpRiyKWAuGuPdt7jg_4l6BTsgjVW7FMtdaQ12DaeYVIYdrJjT60iZ-YVsmud1149EtTuvUg.svg",
+    logoUrl: toolPresetAsset("animate.svg"),
     logoAlt: "Animate logo",
   },
   "premiere-rush": {
     name: "Premiere Rush",
-    logoUrl: "https://i.namu.wiki/i/nSfsFM97VdDSUA40t1KLpz6vsmLwUsALoz9GCDatWzIRfefsOuWyex94lM4WOlcq3UJpljOlQ0VAeVcpXwg-3l4nthz8qcIyfDS41eIgSenkzUs8NuhxYndEdTdpTbnswUTMxpKXV_u_ASPuKFCX6w.svg",
+    logoUrl: toolPresetAsset("premiere-rush.svg"),
     logoAlt: "Premiere Rush logo",
   },
   "indesign": {
     name: "InDesign",
-    logoUrl: "https://i.namu.wiki/i/SjtqPHViHH2gl6ACRQnrLzFRLMiR5kWEU3oq9f0s4o5YG12JrTmXGWYrUrAJCa5j5giqlDCPOiSnsOCmwQrSPA.svg",
+    logoUrl: toolPresetAsset("indesign.svg"),
     logoAlt: "InDesign logo",
   },
   "incopy": {
     name: "InCopy",
-    logoUrl: "https://i.namu.wiki/i/rNlmiB6U0mwpi_ssjugc6t_mbR8CmEoPU1p3iZ3185aJGYBv0R4x31IjmMzEHcEeaQJqETM2BVb3CmyXx-_Nj4ygLnqIZL3wy6F6arPOQjTeLgGKXsfPE_lDx9F2e3Y2FAE-Z7bP9-ng43VXIfe1zQ.svg",
+    logoUrl: toolPresetAsset("incopy.svg"),
     logoAlt: "InCopy logo",
   },
   "dreamweaver": {
     name: "Dreamweaver",
-    logoUrl: "https://i.namu.wiki/i/Gxlvull9tBNWUhPsqy_mwy4wlG6rCckVUVihcf6nZXDSoJHaM411kK-1WZJD3omkuwbuoKyAcIC3PfskKY2Kr2dEO6zzQstnTh6mEWO45FZFB_9j-A7nTDo4Ee6-SMDUKP1js8M3B5gDIHYpUQt_sw.svg",
+    logoUrl: toolPresetAsset("dreamweaver.svg"),
     logoAlt: "Dreamweaver logo",
   },
   "audition": {
     name: "Audition",
-    logoUrl: "https://i.namu.wiki/i/dysDKKEZIXg038nVn2tIe-w9PCpp__Mj4vTQANmQAT0IlKE1xPbvXThxF4lT-wI7bdUHYAMYpvX29T1rnPCN2YwcODzE8eVyzU6klZO7tm7PtroHOBU2X6ztQuV34lzum6M_EiADS5oCCz2rSFrKvA.svg",
+    logoUrl: toolPresetAsset("audition.svg"),
     logoAlt: "Audition logo",
   },
   "media-encoder": {
     name: "Media Encoder",
-    logoUrl: "https://i.namu.wiki/i/HkalKwy8kRBZKQu3orl3utL_Hw10wRB92sJoKV_Ln1yUISyo6CSJIN-HDNZAXRV6o3jUC6gCZDZqD2DPe12ZECUQKraE9NRWkqjBjI-2nsLHx00oHeR6mf9MYr5zS6gOOXpfR2LLokb6umQcwrLlvQ.svg",
+    logoUrl: toolPresetAsset("media-encoder.svg"),
     logoAlt: "Media Encoder logo",
   },
   "stock": {
     name: "Stock",
-    logoUrl: "https://i.namu.wiki/i/7pmsZxnnSd6w5jjvpHQmQGH0Wqbtg_RzqX6FfOYH4912v6ngDsziw3SdcJdzVP31uGjO8iHuc2RUaSZKLA3u2vvW1hG4Ee-qsTCukduoRIjfnDB-djPOEnSd2PWdmVrdxVHfWA29qazJG9I30JZiHg.svg",
+    logoUrl: toolPresetAsset("stock.svg"),
     logoAlt: "Adobe Stock logo",
   },
   "bridge": {
     name: "Bridge",
-    logoUrl: "https://i.namu.wiki/i/Jz8v1tcKDRNm8iJEg8asNVKbHnouPJwgEJuslOaisiGhnCBcj1Wm_RjDkl4ZcASqWe4HtMolE1YLzrkVfGLknaMrESLyeGrrXKe3WWWSvIPZN3VABQjM4xgilfltIscaOELryf5yqpG6v5B8NIf0ug.svg",
+    logoUrl: toolPresetAsset("bridge.svg"),
     logoAlt: "Bridge logo",
   },
   "spark": {
     name: "Spark",
-    logoUrl: "https://i.namu.wiki/i/9r5GeEmRlU06naGxsAXYE6NhqE7JcYGEM2bh9TCkaJwoIZaUa3cFE5K9LIb9eK4cjnzUWvZUjd0YwOrnZvMrF-m-c5YI3NQV1Fb6Ts48hFD8Xhhzu3KNkfvRZqE9jT3hTEcsH3xwF0ceuJ-RlTr2rw.webp",
+    logoUrl: toolPresetAsset("spark.webp"),
     logoAlt: "Spark logo",
   },
   "xd": {
     name: "XD",
-    logoUrl: "https://i.namu.wiki/i/4Qs0FJdevgJhU7y8ztgAvp6k8RBFv14sVvzwS6OuVvWYRyPiH1EmfKhnakueue-ByR0p2Uc2mY8snbhd9dXgl4uNDP1dgFjdOuGyfmLicCx6kM_WWM1jDRSOuptpmfd9YofS6ffJ--t0yr2qakejMw.svg",
+    logoUrl: toolPresetAsset("xd.svg"),
     logoAlt: "Adobe XD logo",
   },
   "dimension": {
     name: "Dimension",
-    logoUrl: "https://i.namu.wiki/i/rduwglHk4mPcp6EyhEDmUOs8uTmNGBTuXLzfQVWzUgKu0yNppv-o0caYzsz9zvg5YDtM5wOEPZm5pMcpmBN7dEBxwbBPKC0Wws-tt9BjdobTgkTaSa7bpvi6h2o5mq7KXEAa3IiLabiefkYOIGI2Xw.svg",
+    logoUrl: toolPresetAsset("dimension.svg"),
     logoAlt: "Dimension logo",
   },
   "character-animator": {
     name: "Character Animator",
-    logoUrl: "https://i.namu.wiki/i/kenevJANs_D4YTHjgIA7fi3JOlFVaB7Mt1C0OQSsHjkHSG_qZ-m0lb5zGb7Or81tJre1N7TvA0f18uDT5dFlwvUKWyaTt6ptS054E-L7CKtGxZvgD_aCSwC4HVCBuzlvSswm4jTz4ji8KYZDjJGJVQ.svg",
+    logoUrl: toolPresetAsset("character-animator.svg"),
     logoAlt: "Character Animator logo",
   },
   "fresco": {
     name: "Fresco",
-    logoUrl: "https://i.namu.wiki/i/jd4JGhe13yHCtGADaCpN5h4Y3ExYcwqzmhbKCrtR__7uSg6pHBnzsa_2ex-3pryu7dV-xhYSHP7YImmrtN6MCX2amwR7VU-sf_pldQwD-ALn4en9eThdQJnj6-QiY-LsVXGUL1Hcyv2CaekbhfU-_Q.svg",
+    logoUrl: toolPresetAsset("fresco.svg"),
     logoAlt: "Fresco logo",
   },
   "aero": {
     name: "Aero",
-    logoUrl: "https://i.namu.wiki/i/CzrLsJrHhqCzsB-y7k8Pq02D7RV7ZvbmssvLWhckMWyIYws0QUPqqGE_SZSWLG4dXZiKzf2jKdjUnvpbq6RGrUvYNa2Uy9iZafxc99yTpdZUvCvWDzRaxEqK-SpW0cZ-O-pusPvbd0Wf1alwXQ5FCA.webp",
+    logoUrl: toolPresetAsset("aero.webp"),
     logoAlt: "Aero logo",
   },
   "firefly": {
     name: "Firefly",
-    logoUrl: "https://i.namu.wiki/i/jG0lHgs5mA8zq6QEO9Yafbdoh7EFqbMgTDqxOOtfTZ7vMfa1kcD8g59slnrOPkOYyqUQRnqqD0-gy4Py_RH_Pg.svg",
+    logoUrl: toolPresetAsset("firefly.svg"),
     logoAlt: "Firefly logo",
   },
 });
@@ -468,6 +517,10 @@ function normalizeGitHubRepo(value) {
   return `${parts[0]}/${parts[1]}`;
 }
 
+function normalizeGitHubBranch(value) {
+  return String(value || "").trim().replace(/^\/+|\/+$/g, "");
+}
+
 function resolveGitHubRepoFromPagesLocation(locationRef = window.location) {
   const hostname = String(locationRef.hostname || "").toLowerCase();
   const suffix = ".github.io";
@@ -495,10 +548,34 @@ function resolveGitHubRepoFromPagesLocation(locationRef = window.location) {
   return `${owner}/${repoName}`;
 }
 
-function buildGitHubSiteJsonUrl(repo) {
+function buildGitHubRepoApiUrl(repo) {
   const normalizedRepo = normalizeGitHubRepo(repo);
+  return normalizedRepo ? `https://api.github.com/repos/${normalizedRepo}` : "";
+}
+
+function getKnownGitHubDefaultBranch(repo) {
+  const normalizedRepo = normalizeGitHubRepo(repo);
+  if (!normalizedRepo || state.githubDefaultBranchRepo !== normalizedRepo) return "";
+  if (state.githubDefaultBranchSource !== "fetched") return "";
+  return normalizeGitHubBranch(state.githubDefaultBranch);
+}
+
+function getGitHubDefaultBranch(repo) {
+  return getKnownGitHubDefaultBranch(repo) || fallbackGitHubBranch;
+}
+
+function setGitHubDefaultBranch(repo, branch, source = "fetched") {
+  state.githubDefaultBranchRepo = normalizeGitHubRepo(repo);
+  state.githubDefaultBranch = normalizeGitHubBranch(branch) || fallbackGitHubBranch;
+  state.githubDefaultBranchSource = source;
+  return state.githubDefaultBranch;
+}
+
+function buildGitHubSiteJsonUrl(repo, branch = getGitHubDefaultBranch(repo)) {
+  const normalizedRepo = normalizeGitHubRepo(repo);
+  const normalizedBranch = normalizeGitHubBranch(branch) || fallbackGitHubBranch;
   return normalizedRepo
-    ? `https://github.com/${normalizedRepo}/blob/${githubDefaultBranch}/${githubJsonPath}`
+    ? `https://github.com/${normalizedRepo}/blob/${normalizedBranch}/${githubJsonPath}`
     : "";
 }
 
@@ -509,6 +586,25 @@ function buildGitHubRepoUrl(repo) {
 
 function getEffectiveGitHubRepo(repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
   return normalizeGitHubRepo(repoValue) || resolveGitHubRepoFromPagesLocation(locationRef);
+}
+
+function getGitHubDefaultBranchNote(repo) {
+  const normalizedRepo = normalizeGitHubRepo(repo);
+  if (!normalizedRepo) return "";
+
+  if (state.githubDefaultBranchRepo === normalizedRepo) {
+    if (state.githubDefaultBranchSource === "loading") {
+      return ` GitHub 기본 브랜치를 확인 중이며, 확인 전까지는 ${fallbackGitHubBranch} 기준 링크를 사용합니다.`;
+    }
+    if (state.githubDefaultBranchSource === "fetched") {
+      return ` GitHub 기본 브랜치: ${state.githubDefaultBranch}.`;
+    }
+    if (state.githubDefaultBranchSource === "fallback") {
+      return ` GitHub 기본 브랜치를 확인하지 못해 ${fallbackGitHubBranch} 기준 링크를 사용합니다.`;
+    }
+  }
+
+  return ` GitHub 기본 브랜치는 확인 전까지 ${fallbackGitHubBranch}로 가정합니다.`;
 }
 
 function getAutoFooterRepoLink(links = state.data?.site?.footer?.links, repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
@@ -533,7 +629,91 @@ function getEffectiveFooterLinks(links = state.data?.site?.footer?.links, repoVa
 
 function resolveGitHubSiteJsonUrl(locationRef = window.location, repoValue = state.data?.site?.githubRepo) {
   const effectiveRepo = getEffectiveGitHubRepo(repoValue, locationRef);
-  return effectiveRepo ? buildGitHubSiteJsonUrl(effectiveRepo) : "";
+  return effectiveRepo ? buildGitHubSiteJsonUrl(effectiveRepo, getGitHubDefaultBranch(effectiveRepo)) : "";
+}
+
+async function ensureGitHubDefaultBranch(repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
+  const effectiveRepo = getEffectiveGitHubRepo(repoValue, locationRef);
+  if (!effectiveRepo) {
+    state.githubBranchRequestId += 1;
+    state.githubDefaultBranchRepo = "";
+    state.githubDefaultBranch = fallbackGitHubBranch;
+    state.githubDefaultBranchSource = "fallback";
+    renderGitHubRepoField({ preserveInputValue: true });
+    return fallbackGitHubBranch;
+  }
+
+  const cachedBranch = getKnownGitHubDefaultBranch(effectiveRepo);
+  if (cachedBranch) return cachedBranch;
+
+  const requestId = ++state.githubBranchRequestId;
+  setGitHubDefaultBranch(effectiveRepo, fallbackGitHubBranch, "loading");
+  renderGitHubRepoField({ preserveInputValue: true });
+
+  try {
+    const response = await fetch(buildGitHubRepoApiUrl(effectiveRepo), {
+      cache: "no-store",
+      headers: {
+        Accept: "application/vnd.github+json",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`GitHub API ${response.status}`);
+    }
+
+    const payload = await response.json();
+    if (requestId !== state.githubBranchRequestId) {
+      return getGitHubDefaultBranch(effectiveRepo);
+    }
+
+    const defaultBranch = setGitHubDefaultBranch(effectiveRepo, payload.default_branch, "fetched");
+
+    renderGitHubRepoField({ preserveInputValue: true });
+
+    return defaultBranch;
+  } catch (error) {
+    if (requestId !== state.githubBranchRequestId) {
+      return getGitHubDefaultBranch(effectiveRepo);
+    }
+
+    setGitHubDefaultBranch(effectiveRepo, fallbackGitHubBranch, "fallback");
+    renderGitHubRepoField({ preserveInputValue: true });
+    return fallbackGitHubBranch;
+  }
+}
+
+function scheduleGitHubDefaultBranchLookup(repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
+  if (state.githubBranchTimer) {
+    window.clearTimeout(state.githubBranchTimer);
+    state.githubBranchTimer = null;
+  }
+
+  const effectiveRepo = getEffectiveGitHubRepo(repoValue, locationRef);
+  if (!effectiveRepo) {
+    state.githubBranchRequestId += 1;
+    state.githubDefaultBranchRepo = "";
+    state.githubDefaultBranch = fallbackGitHubBranch;
+    state.githubDefaultBranchSource = "fallback";
+    renderGitHubRepoField({ preserveInputValue: true });
+    return;
+  }
+
+  if (state.githubDefaultBranchRepo !== effectiveRepo) {
+    state.githubBranchRequestId += 1;
+    state.githubDefaultBranchRepo = effectiveRepo;
+    state.githubDefaultBranch = fallbackGitHubBranch;
+    state.githubDefaultBranchSource = "fallback";
+  }
+
+  if (getKnownGitHubDefaultBranch(effectiveRepo)) {
+    renderGitHubRepoField({ preserveInputValue: true });
+    return;
+  }
+
+  state.githubBranchTimer = window.setTimeout(() => {
+    state.githubBranchTimer = null;
+    void ensureGitHubDefaultBranch(repoValue, locationRef);
+  }, 350);
 }
 
 function normalizeNavLinks(items) {
@@ -755,6 +935,12 @@ function normalizeWorksDisplayMode(value) {
   return value === "category-stack" ? "category-stack" : "grid";
 }
 
+function normalizeWorksVisualPreset(value) {
+  return ["reference", "panel", "minimal"].includes(String(value || "").trim())
+    ? String(value).trim()
+    : "reference";
+}
+
 function normalizeWorksColumnCount(value, fallback) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 8 ? parsed : fallback;
@@ -770,6 +956,17 @@ function normalizePricingPlanDesign(value, fallback = "shortform") {
   const normalized = String(value || "").trim();
   if (normalized === "longform" || normalized === "shortform") return normalized;
   return fallback === "longform" ? "longform" : "shortform";
+}
+
+function normalizePricingGridColumns(value, fallback) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 4 ? parsed : fallback;
+}
+
+function normalizePricingProcessStyle(value) {
+  return ["cards", "minimal", "editorial"].includes(String(value || "").trim())
+    ? String(value).trim()
+    : "cards";
 }
 
 function normalizeWorksCategoryOrder(items, videos) {
@@ -1228,6 +1425,7 @@ function normalizeData(input) {
     works: {
       ...base.works,
       ...(source.works || {}),
+      visualPreset: normalizeWorksVisualPreset(source.works?.visualPreset),
       displayMode: normalizeWorksDisplayMode(source.works?.displayMode),
       gridColumns: normalizeWorksColumnCount(source.works?.gridColumns, base.works.gridColumns),
       categoryStackColumns: normalizeWorksColumnCount(source.works?.categoryStackColumns, base.works.categoryStackColumns),
@@ -1240,6 +1438,8 @@ function normalizeData(input) {
     pricing: {
       ...base.pricing,
       ...(source.pricing || {}),
+      gridColumns: normalizePricingGridColumns(source.pricing?.gridColumns, base.pricing.gridColumns),
+      processStyle: normalizePricingProcessStyle(source.pricing?.processStyle),
       customWorksEnabled: normalizeEnabled(source.pricing?.customWorksEnabled, base.pricing.customWorksEnabled),
       processEnabled: normalizeEnabled(source.pricing?.processEnabled, base.pricing.processEnabled),
       plans: Array.isArray(source.pricing?.plans)
@@ -1341,23 +1541,23 @@ function renderGitHubRepoField({ preserveInputValue = false } = {}) {
   if (!note) return;
 
   if (rawRepo && normalizedRepo) {
-    note.textContent = "직접 입력한 GitHub Repo를 사용합니다.";
+    note.textContent = `직접 입력한 GitHub Repo를 사용합니다.${getGitHubDefaultBranchNote(effectiveRepo)}`;
     return;
   }
 
   if (rawRepo && !normalizedRepo) {
     note.textContent = inferredRepo
-      ? `owner/repo 형식이 아니어서 현재 GitHub Pages 주소의 ${inferredRepo}를 대신 사용합니다.`
+      ? `owner/repo 형식이 아니어서 현재 GitHub Pages 주소의 ${inferredRepo}를 대신 사용합니다.${getGitHubDefaultBranchNote(inferredRepo)}`
       : "owner/repo 형식으로 입력해주세요.";
     return;
   }
 
   if (inferredRepo) {
-    note.textContent = `현재 GitHub Pages 주소에서 ${inferredRepo}를 자동으로 감지해 사용합니다.`;
+    note.textContent = `현재 GitHub Pages 주소에서 ${inferredRepo}를 자동으로 감지해 사용합니다.${getGitHubDefaultBranchNote(inferredRepo)}`;
     return;
   }
 
-  note.textContent = "GitHub Pages에서 열면 현재 repo를 자동으로 감지합니다.";
+  note.textContent = "GitHub Pages에서 열면 현재 repo를 자동으로 감지하고 기본 브랜치도 함께 확인합니다.";
 }
 
 function textOrFallback(value, fallback) {
@@ -1493,6 +1693,21 @@ function escapeWithBreaks(value) {
   return escapeHTML(String(value || "")).replace(/\n/g, "<br>");
 }
 
+function resolvePreviewAssetUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (
+    /^https?:\/\//i.test(raw)
+    || raw.startsWith("data:")
+    || raw.startsWith("blob:")
+    || raw.startsWith("/")
+    || raw.startsWith("../")
+  ) {
+    return raw;
+  }
+  return `../${raw.replace(/^\.?\//, "")}`;
+}
+
 function mountLivePreview() {
   const card = $("#live-preview-card");
   const panel = $(`.tab-panel[data-panel="${state.activeTab}"]`);
@@ -1612,7 +1827,7 @@ function renderPreviewHeroCareerBody(panel) {
             <span class="hero-preview-entry-title text-white">${escapeHTML(item.title || "")}</span>
             ${item.period ? `<span class="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fde047]">${escapeHTML(item.period)}</span>` : ""}
           </div>
-          ${item.description ? `<div class="hero-preview-entry-copy mt-2 text-[#cec6ad]">${escapeHTML(item.description)}</div>` : ""}
+          ${item.description ? `<div class="hero-preview-entry-copy mt-2 text-[#cec6ad]">${escapeWithBreaks(item.description)}</div>` : ""}
         </div>
       `).join("")}
     </div>
@@ -1629,7 +1844,7 @@ function renderPreviewHeroResourceBody(panel) {
             <span class="hero-preview-resource-logo">
               <img
                 alt="${escapeHTML(item.logoAlt || item.name || "")}"
-                src="${escapeHTML(item.logoUrl)}"
+                src="${escapeHTML(resolvePreviewAssetUrl(item.logoUrl))}"
                 referrerpolicy="no-referrer"
                 onerror="this.parentElement.style.display='none'; this.remove();">
             </span>
@@ -1704,26 +1919,44 @@ function renderPreviewStatsItems() {
 }
 
 function renderPreviewWorksCard(video, options = {}) {
+  const preset = normalizeWorksVisualPreset(options.preset || state.data.works?.visualPreset);
   const metaParts = [];
   if (video.category) metaParts.push(video.category);
   if (video.date) metaParts.push(formatDisplayDate(video.date));
+  const metaClass = preset === "reference"
+    ? "flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-[#97917a]"
+    : "flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-[#97917a]";
   const metaMarkup = metaParts.length
-    ? `<div class="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-[#97917a]">
+    ? `<div class="${metaClass}">
          ${metaParts.map((item) => `<span>${escapeHTML(item)}</span>`).join("")}
        </div>`
     : "";
   const mediaStyle = options.mediaHeight
     ? `height:${options.mediaHeight};`
     : "aspect-ratio:16 / 9;";
+  const articleClass = preset === "reference"
+    ? "group"
+    : preset === "minimal"
+      ? "overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]"
+      : "overflow-hidden rounded-2xl border border-white/10 bg-[#1e1c12]";
+  const thumbClass = preset === "reference"
+    ? "relative overflow-hidden rounded-2xl border border-white/10 bg-[#2d2a1f] shadow-[0_18px_42px_rgba(0,0,0,0.18)]"
+    : "relative overflow-hidden bg-[#2d2a1f]";
+  const bodyClass = preset === "reference"
+    ? "grid gap-3 pt-4"
+    : "grid gap-3 p-5";
+  const titleClass = preset === "reference"
+    ? "text-base font-bold leading-snug tracking-tight text-white"
+    : "text-lg font-bold leading-snug tracking-tight text-white";
 
   return `
-    <article class="overflow-hidden rounded-2xl border border-white/10 bg-[#1e1c12]">
-      <div class="relative overflow-hidden bg-[#2d2a1f]" style="${mediaStyle}">
+    <article class="${articleClass}">
+      <div class="${thumbClass}" style="${mediaStyle}">
         <img class="h-full w-full object-cover" alt="${escapeHTML(video.title || "영상 썸네일")}" src="${escapeHTML(videoThumb(video.id))}" referrerpolicy="no-referrer">
         <span class="absolute right-4 top-4 rounded-full border ${video.type === "short" ? "border-[#3bf7ff]/30 text-[#8ffcff]" : "border-[#fde047]/30 text-[#fde047]"} bg-[#16130a]/85 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">${escapeHTML(video.type === "short" ? "숏폼" : "롱폼")}</span>
       </div>
-      <div class="grid gap-3 p-5">
-        <div class="text-lg font-bold leading-snug tracking-tight text-white">${escapeHTML(textOrFallback(video.title, "제목 미입력"))}</div>
+      <div class="${bodyClass}">
+        <div class="${titleClass}">${escapeHTML(textOrFallback(video.title, "제목 미입력"))}</div>
         ${metaMarkup}
       </div>
     </article>
@@ -1737,19 +1970,26 @@ function getPreviewWorksSingleColumnCardWidth(singleSize) {
   return "100%";
 }
 
-function renderPreviewGridWorksFilters(categories, hasShortVideos) {
+function renderPreviewGridWorksFilters(categories, hasShortVideos, preset = state.data.works?.visualPreset) {
+  const visualPreset = normalizeWorksVisualPreset(preset);
+  const activeClass = visualPreset === "panel"
+    ? "rounded-full border border-[#fde047]/30 bg-[#fde047]/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fde047]"
+    : "rounded-full border border-[#fde047]/30 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fde047]";
+  const neutralClass = visualPreset === "panel"
+    ? "rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#cec6ad]"
+    : "rounded-full border border-white/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#cec6ad]";
   const chips = [
-    '<span class="rounded-full border border-[#fde047]/30 bg-[#fde047]/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fde047]">전체</span>',
-    '<span class="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#cec6ad]">롱폼</span>',
+    `<span class="${activeClass}">전체</span>`,
+    `<span class="${neutralClass}">롱폼</span>`,
     ...(hasShortVideos
-      ? ['<span class="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#cec6ad]">숏폼</span>']
+      ? [`<span class="${neutralClass}">숏폼</span>`]
       : []),
   ];
 
   const categoryChips = [
-    '<span class="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#cec6ad]">전체 카테고리</span>',
+    `<span class="${neutralClass}">전체 카테고리</span>`,
     ...categories.map((category) => `
-      <span class="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#cec6ad]">${escapeHTML(category)}</span>
+      <span class="${neutralClass}">${escapeHTML(category)}</span>
     `),
   ];
 
@@ -1762,17 +2002,24 @@ function renderPreviewGridWorksFilters(categories, hasShortVideos) {
   `;
 }
 
-function renderPreviewCategoryStackWorksFilters(hasShortVideos) {
+function renderPreviewCategoryStackWorksFilters(hasShortVideos, preset = state.data.works?.visualPreset) {
+  const visualPreset = normalizeWorksVisualPreset(preset);
+  const activeClass = visualPreset === "panel"
+    ? "rounded-full border border-[#fde047]/30 bg-[#fde047]/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fde047]"
+    : "rounded-full border border-[#fde047]/30 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fde047]";
+  const neutralClass = visualPreset === "panel"
+    ? "rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#cec6ad]"
+    : "rounded-full border border-white/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#cec6ad]";
   return `
     <div class="flex flex-wrap items-center gap-3">
-      <span class="rounded-full border border-[#fde047]/30 bg-[#fde047]/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fde047]">전체</span>
-      <span class="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#cec6ad]">롱폼</span>
-      ${hasShortVideos ? '<span class="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#cec6ad]">숏폼</span>' : ""}
+      <span class="${activeClass}">전체</span>
+      <span class="${neutralClass}">롱폼</span>
+      ${hasShortVideos ? `<span class="${neutralClass}">숏폼</span>` : ""}
     </div>
   `;
 }
 
-function renderPreviewWorksGrid(videos, columns) {
+function renderPreviewWorksGrid(videos, columns, preset = state.data.works?.visualPreset) {
   if (!videos.length) {
     return `
       <div class="rounded-2xl border border-dashed border-white/10 px-6 py-8 text-center text-sm font-medium text-[#8b8577]">
@@ -1782,15 +2029,17 @@ function renderPreviewWorksGrid(videos, columns) {
   }
 
   const safeColumns = normalizeWorksColumnCount(columns, DEFAULT_DATA.works.gridColumns);
+  const gapClass = normalizeWorksVisualPreset(preset) === "reference" ? "gap-7" : "gap-6";
 
   return `
-    <div class="grid gap-6" style="grid-template-columns:repeat(${safeColumns}, minmax(0, 1fr));">
-      ${videos.map((video) => renderPreviewWorksCard(video)).join("")}
+    <div class="grid ${gapClass}" style="grid-template-columns:repeat(${safeColumns}, minmax(0, 1fr));">
+      ${videos.map((video) => renderPreviewWorksCard(video, { preset })).join("")}
     </div>
   `;
 }
 
-function renderPreviewWorksCategoryStack(videos, categories, works) {
+function renderPreviewWorksCategoryStack(videos, categories, works, preset = state.data.works?.visualPreset) {
+  const visualPreset = normalizeWorksVisualPreset(preset);
   const safeColumns = normalizeWorksColumnCount(works.categoryStackColumns, DEFAULT_DATA.works.categoryStackColumns);
   const singleSize = normalizeWorksSingleColumnSize(works.categoryStackSingleColumnSize);
   const categoryEntryMap = new Map(
@@ -1807,7 +2056,7 @@ function renderPreviewWorksCategoryStack(videos, categories, works) {
   }
 
   return `
-    <div class="grid gap-12">
+    <div class="grid ${visualPreset === "reference" ? "gap-10" : "gap-12"}">
       ${categories.map((category) => {
         const categoryVideos = videos
           .filter((video) => video.category === category)
@@ -1826,16 +2075,16 @@ function renderPreviewWorksCategoryStack(videos, categories, works) {
         if (!categoryVideos.length) return "";
 
         return `
-          <section class="grid gap-5">
+          <section class="grid ${visualPreset === "reference" ? "gap-4" : "gap-5"}">
             <div class="grid gap-2 border-b border-white/10 pb-4">
               <span class="text-[11px] font-black uppercase tracking-[0.22em] text-[#97917a]">Category</span>
-              <h3 class="mb-0 text-3xl font-black tracking-tight text-white">${escapeHTML(displayTitle)}</h3>
+              <h3 class="mb-0 ${visualPreset === "reference" ? "text-[1.65rem]" : "text-3xl"} font-black tracking-tight text-white">${escapeHTML(displayTitle)}</h3>
               ${categoryEntry.meta ? `<div class="text-[12px] leading-relaxed text-[#cec6ad]">${escapeWithBreaks(categoryEntry.meta)}</div>` : ""}
             </div>
             <div class="grid gap-6" style="grid-template-columns:repeat(${resolvedColumns}, minmax(0, 1fr));${resolvedColumns === 1 ? "justify-items:center;" : ""}">
               ${categoryVideos.map((video) => `
                 <div style="width:${cardWidth};max-width:100%;">
-                  ${renderPreviewWorksCard(video)}
+                  ${renderPreviewWorksCard(video, { preset })}
                 </div>
               `).join("")}
             </div>
@@ -1846,23 +2095,79 @@ function renderPreviewWorksCategoryStack(videos, categories, works) {
   `;
 }
 
-function renderPreviewProcessSteps() {
+function getPreviewProcessStepNumber(step, index) {
+  const value = String(step?.number || "").trim();
+  return value || String(index + 1).padStart(2, "0");
+}
+
+function renderPreviewProcessRows(steps, variant) {
+  return chunkProcessSteps(steps).map((row, rowIndex) => `
+    <div class="grid gap-4 mx-auto w-full" style="${row.length === 1 ? "max-width:20rem;grid-template-columns:repeat(1,minmax(0,1fr));" : ""}${row.length === 2 ? "max-width:42rem;grid-template-columns:repeat(2,minmax(0,1fr));" : ""}${row.length === 3 ? "max-width:64rem;grid-template-columns:repeat(3,minmax(0,1fr));" : ""}${row.length >= 4 ? "max-width:100%;grid-template-columns:repeat(4,minmax(0,1fr));" : ""}">
+      ${row.map((step, index) => {
+        const stepIndex = rowIndex * 4 + index;
+        const cardClass = variant === "cards"
+          ? "grid gap-4 rounded-2xl border border-[#fde047]/20 bg-[linear-gradient(180deg,rgba(45,42,31,0.94),rgba(24,22,14,0.98))] p-6 shadow-[0_18px_40px_rgba(0,0,0,0.2)]"
+          : "grid gap-4 border-l border-[#fde047]/35 bg-transparent pl-4 pt-2";
+        const numberClass = variant === "cards"
+          ? "text-3xl font-black tracking-[-0.06em] text-[#fde047]"
+          : "text-2xl font-black tracking-[-0.06em] text-[#fde047]";
+        const ruleClass = variant === "cards"
+          ? "h-px flex-1 bg-gradient-to-r from-[#fde047]/60 to-transparent"
+          : "h-px flex-1 bg-white/10";
+        const copyClass = variant === "cards"
+          ? "text-sm leading-relaxed text-[#e0d8c0]"
+          : "text-xs leading-relaxed text-[#cec6ad]";
+
+        return `
+          <article class="${cardClass}">
+            <div class="grid gap-3">
+              <div class="flex items-center gap-3">
+                <div class="${numberClass}">${escapeHTML(getPreviewProcessStepNumber(step, stepIndex))}</div>
+                <span class="${ruleClass}"></span>
+              </div>
+              <div class="text-base font-bold leading-snug text-white">${escapeHTML(textOrFallback(step.title, "프로세스 제목"))}</div>
+            </div>
+            ${step.description ? `<div class="${copyClass}">${escapeWithBreaks(step.description)}</div>` : ""}
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `).join("");
+}
+
+function renderPreviewEditorialProcessSteps(steps) {
+  return `
+    <div class="mx-auto grid w-full max-w-[48rem] gap-0">
+      ${steps.map((step, index) => {
+        const rowAlignClass = index % 2 === 0 ? "md:mr-auto" : "md:ml-auto";
+
+        return `
+        <article class="grid w-full max-w-[36rem] items-start gap-4 ${index === 0 ? "" : "border-t border-white/10"} py-6 grid-cols-[4.75rem_minmax(0,1fr)] ${rowAlignClass} md:grid-cols-[7.25rem_19rem] md:justify-center md:items-center md:gap-8 md:py-9">
+          <div class="justify-self-start text-[3.9rem] font-black leading-[0.78] tracking-[-0.08em] text-[#fde047] md:text-[7rem]">${escapeHTML(getPreviewProcessStepNumber(step, index))}</div>
+          <div class="grid justify-self-start gap-3 text-left md:w-[19rem]">
+            <div class="text-[13px] font-black uppercase tracking-[0.3em] text-[#a29a80]">Step ${String(index + 1).padStart(2, "0")}</div>
+            <div class="text-[1.6rem] font-black leading-[1.02] tracking-[-0.05em] text-white md:text-[2.55rem]">${escapeHTML(textOrFallback(step.title, "프로세스 제목"))}</div>
+            ${step.description ? `<div class="max-w-[34rem] text-sm leading-[1.9] text-[#cec6ad]">${escapeWithBreaks(step.description)}</div>` : ""}
+          </div>
+        </article>
+      `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderPreviewProcessSteps(style) {
   const steps = state.data.pricing.processSteps.filter((step) => step.number || step.title || step.description);
   if (!steps.length) {
     return previewHiddenBlock("프로세스 단계를 추가하면 이곳에 표시됩니다.");
   }
 
-  return chunkProcessSteps(steps).map((row) => `
-    <div class="grid gap-4 mx-auto w-full" style="${row.length === 1 ? "max-width:18rem;grid-template-columns:repeat(1,minmax(0,1fr));" : ""}${row.length === 2 ? "max-width:38rem;grid-template-columns:repeat(2,minmax(0,1fr));" : ""}${row.length === 3 ? "max-width:58rem;grid-template-columns:repeat(3,minmax(0,1fr));" : ""}${row.length >= 4 ? "max-width:100%;grid-template-columns:repeat(4,minmax(0,1fr));" : ""}">
-      ${row.map((step) => `
-        <article class="grid gap-4 min-w-0">
-          <div class="text-2xl font-black text-[#fde047] opacity-40">${escapeHTML(textOrFallback(step.number, "00"))}</div>
-          <div class="font-bold text-white">${escapeHTML(textOrFallback(step.title, "프로세스 제목"))}</div>
-          <div class="text-xs leading-relaxed text-[#cec6ad]">${escapeHTML(textOrFallback(step.description, "프로세스 설명이 이곳에 표시됩니다."))}</div>
-        </article>
-      `).join("")}
-    </div>
-  `).join("");
+  const processStyle = normalizePricingProcessStyle(style);
+  if (processStyle === "editorial") {
+    return renderPreviewEditorialProcessSteps(steps);
+  }
+
+  return renderPreviewProcessRows(steps, processStyle);
 }
 
 function renderPreviewCustomWorks() {
@@ -1875,8 +2180,8 @@ function renderPreviewCustomWorks() {
     const mediaFirst = index % 2 === 1;
     const textSection = `
       <section class="flex flex-col justify-center bg-[#1e1c12] p-10">
-        <div class="mb-6 text-3xl font-bold text-white">${escapeHTML(textOrFallback(block.title, "커스텀 작업 제목"))}</div>
-        <div class="mb-8 leading-relaxed text-[#cec6ad]">${escapeHTML(textOrFallback(block.description, "커스텀 작업 설명이 이곳에 표시됩니다."))}</div>
+        <div class="mb-6 text-3xl font-bold leading-[1.2] text-white">${escapeWithBreaks(textOrFallback(block.title, "커스텀 작업 제목"))}</div>
+        <div class="mb-8 leading-relaxed text-[#cec6ad]">${escapeWithBreaks(textOrFallback(block.description, "커스텀 작업 설명이 이곳에 표시됩니다."))}</div>
         <div class="flex items-center gap-4">
           <span class="text-xl font-black italic tracking-tight text-[#fde047]">${escapeHTML(textOrFallback(block.highlight, "FAST & ACCURATE"))}</span>
           <span class="h-px flex-1 bg-white/10"></span>
@@ -1886,12 +2191,12 @@ function renderPreviewCustomWorks() {
     const mediaSection = `
       <section class="relative min-h-[280px] overflow-hidden bg-[#2d2a1f]">
         ${block.imageUrl
-          ? `<img class="h-full w-full object-cover grayscale" alt="${escapeHTML(block.imageAlt || block.title || "")}" src="${escapeHTML(block.imageUrl)}">`
+          ? `<img class="h-full w-full object-cover" alt="${escapeHTML(block.imageAlt || block.title || "")}" src="${escapeHTML(resolvePreviewAssetUrl(block.imageUrl))}">`
           : '<div class="flex h-full min-h-[280px] items-center justify-center text-sm font-medium text-[#8b8577]">커스텀 작업 이미지를 입력하면 이 영역에 표시됩니다.</div>'}
         <div class="absolute inset-0 bg-gradient-to-t from-[#16130a] to-transparent opacity-70"></div>
         <div class="absolute bottom-8 left-8 right-8">
           <div class="mb-2 text-xs font-bold uppercase tracking-[0.3em] text-[#fde047]">${escapeHTML(textOrFallback(block.eyebrow, "Studio Quality"))}</div>
-          <div class="text-2xl font-bold text-white">${escapeHTML(textOrFallback(block.caption || block.title, "압도적인 퀄리티의 비결"))}</div>
+          <div class="text-2xl font-bold leading-[1.2] text-white">${escapeWithBreaks(textOrFallback(block.caption || block.title, "압도적인 퀄리티의 비결"))}</div>
         </div>
       </section>
     `;
@@ -1943,8 +2248,8 @@ function renderPreviewPlanCards() {
         <div class="mb-10 flex items-start justify-between gap-3">
           ${plan.icon ? `<span class="material-symbols-outlined text-4xl text-[#fde047]">${escapeHTML(plan.icon)}</span>` : ""}
         </div>
-        <div class="mb-2 text-3xl font-bold ${highlighted ? "text-[#fde047]" : "text-white"}">${escapeHTML(textOrFallback(plan.title, "플랜 제목"))}</div>
-        <div class="mb-8 text-sm leading-relaxed text-[#cec6ad]">${escapeHTML(textOrFallback(plan.description, "플랜 설명이 이곳에 표시됩니다."))}</div>
+        <div class="mb-2 text-3xl font-bold leading-[1.2] ${highlighted ? "text-[#fde047]" : "text-white"}">${escapeWithBreaks(textOrFallback(plan.title, "플랜 제목"))}</div>
+        <div class="mb-8 text-sm leading-relaxed text-[#cec6ad]">${escapeWithBreaks(textOrFallback(plan.description, "플랜 설명이 이곳에 표시됩니다."))}</div>
         <ul class="mb-10 space-y-4">
           ${(plan.features || []).length
             ? plan.features.map((feature) => `
@@ -2007,6 +2312,8 @@ function buildBrandPreview() {
 
 function buildHeroPreview() {
   const backgroundMedia = getHeroBackgroundMedia(state.data.hero.backgroundVideoUrl);
+  const statusLabel = String(state.data.hero.statusLabel || "").trim();
+  const statusText = String(state.data.hero.statusText || "").trim();
   const backgroundMarkup = backgroundMedia.type === "youtube"
     ? `<iframe class="absolute inset-0 h-full w-full border-0 pointer-events-none" style="transform:scale(1.28);transform-origin:center;" title="Hero background video" allow="autoplay; encrypted-media; picture-in-picture" src="${escapeHTML(backgroundMedia.src)}"></iframe>`
     : backgroundMedia.type === "video"
@@ -2028,15 +2335,17 @@ function buildHeroPreview() {
                 ${renderPreviewHeroActions()}
               </div>
             </div>
-            <div class="hidden lg:block">
-              <div class="flex flex-col items-end gap-2 text-right">
-                <span class="text-[10px] uppercase tracking-[0.2em] text-[#cec6ad]">${escapeHTML(textOrFallback(state.data.hero.statusLabel, "Status"))}</span>
-                <div class="flex items-center gap-2">
-                  <span class="h-2 w-2 rounded-full bg-[#3bf7ff]"></span>
-                  <span class="text-xs font-bold text-white">${escapeHTML(textOrFallback(state.data.hero.statusText, "READY FOR CUSTOMIZATION"))}</span>
+            ${statusLabel || statusText ? `
+              <div class="hidden lg:block">
+                <div class="flex flex-col items-end gap-2 text-right">
+                  ${statusLabel ? `<span class="text-[10px] uppercase tracking-[0.2em] text-[#cec6ad]">${escapeHTML(statusLabel)}</span>` : ""}
+                  <div class="flex items-center gap-2">
+                    <span class="h-2 w-2 rounded-full bg-[#3bf7ff]"></span>
+                    <span class="text-xs font-bold text-white">${escapeHTML(statusText)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            ` : ""}
           </div>
           ${renderPreviewHeroInfoPanels()}
         </div>
@@ -2094,7 +2403,9 @@ function buildStatsPreview() {
 
 function buildWorksPreview() {
   const works = state.data.works || DEFAULT_DATA.works;
-  const hasSectionShell = Boolean(String(works.sectionTitle || "").trim() || String(works.sectionDescription || "").trim() || works.videos.length);
+  const visualPreset = normalizeWorksVisualPreset(works.visualPreset);
+  const displayTitle = String(works.sectionTitle || "").trim() || DEFAULT_DATA.works.sectionTitle || "영상 포트폴리오";
+  const hasSectionShell = Boolean(displayTitle || String(works.sectionDescription || "").trim() || works.videos.length);
   const description = String(state.data.works.sectionDescription || "").trim();
   const videos = getSortedWorksVideos(state.data.works.videos);
   const categories = getOrderedWorksCategories(videos, works.categoryOrder);
@@ -2111,24 +2422,55 @@ function buildWorksPreview() {
   const filtersMarkup = !hasVideos
     ? ""
     : displayMode === "category-stack"
-      ? (works.categoryStackTypeFilterEnabled ? renderPreviewCategoryStackWorksFilters(hasShortVideos) : "")
-      : renderPreviewGridWorksFilters(categories, hasShortVideos);
+      ? (works.categoryStackTypeFilterEnabled ? renderPreviewCategoryStackWorksFilters(hasShortVideos, visualPreset) : "")
+      : renderPreviewGridWorksFilters(categories, hasShortVideos, visualPreset);
   const contentMarkup = displayMode === "category-stack"
-    ? renderPreviewWorksCategoryStack(videos, categories, works)
-    : renderPreviewWorksGrid(videos, works.gridColumns);
+    ? renderPreviewWorksCategoryStack(videos, categories, works, visualPreset)
+    : renderPreviewWorksGrid(videos, works.gridColumns, visualPreset);
+  const shellClass = visualPreset === "reference"
+    ? ""
+    : visualPreset === "minimal"
+      ? "rounded-[1.5rem] border border-white/10 bg-white/[0.02] px-6 py-8 md:px-8 md:py-8"
+      : "rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(45,42,31,0.92),rgba(22,19,10,0.98))] px-6 py-8 shadow-[0_24px_60px_rgba(0,0,0,0.24)] md:px-10 md:py-10";
+  const headingClass = visualPreset === "reference"
+    ? "mb-8 grid gap-4"
+    : `mb-10 grid gap-6 ${description ? "lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-end" : ""}`;
+  const labelMarkup = visualPreset === "reference"
+    ? '<span class="text-[11px] font-black uppercase tracking-[0.26em] text-[#97917a]">Video Portfolio</span>'
+    : visualPreset === "minimal"
+      ? '<span class="inline-flex w-fit items-center gap-3 rounded-full border border-white/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.22em] text-[#d5cdb7]"><span class="h-2 w-2 rounded-full bg-[#fde047]/70"></span>Video Portfolio</span>'
+      : '<span class="inline-flex w-fit items-center gap-3 rounded-full border border-[#fde047]/30 bg-[#fde047]/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.22em] text-[#fde047]"><span class="h-2 w-2 rounded-full bg-[#fde047]"></span>Video Portfolio</span>';
+  const titleClass = visualPreset === "reference"
+    ? "text-4xl font-black tracking-tight text-white md:text-5xl"
+    : visualPreset === "minimal"
+      ? "text-4xl font-black tracking-tight text-white md:text-[3.4rem]"
+      : "text-4xl font-black tracking-tight text-white md:text-6xl";
+  const titleLineClass = visualPreset === "reference"
+    ? "h-px w-12 bg-gradient-to-r from-[#fde047] to-transparent"
+    : visualPreset === "minimal"
+      ? "h-px w-16 bg-gradient-to-r from-[#fde047] to-transparent"
+      : "h-px w-24 bg-gradient-to-r from-[#fde047] to-transparent";
+  const descriptionClass = visualPreset === "reference"
+    ? "max-w-3xl text-sm leading-relaxed text-[#c4bcaa] md:text-base"
+    : "max-w-2xl border-l border-white/10 pl-6 text-sm leading-relaxed text-[#cec6ad] md:text-base";
 
   return `
     <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
       <div id="works" class="mx-auto max-w-screen-2xl border-t border-white/10 pt-12">
-        <div class="mb-10 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div class="mb-4 block text-xs uppercase tracking-[0.2em] text-[#fde047]">Video Portfolio</div>
-            <div class="text-4xl font-bold tracking-tighter text-white md:text-6xl">${escapeHTML(textOrFallback(state.data.works.sectionTitle, "영상 포트폴리오"))}</div>
+        <div class="${shellClass}">
+          <div class="${headingClass}">
+            <div class="grid gap-4">
+              ${labelMarkup}
+              <div class="grid gap-4">
+                <div class="${titleClass}">${escapeHTML(displayTitle)}</div>
+                <span class="${titleLineClass}"></span>
+              </div>
+            </div>
+            ${description ? `<div class="${descriptionClass}">${escapeWithBreaks(description)}</div>` : ""}
           </div>
-          ${description ? `<div class="max-w-2xl text-sm leading-relaxed text-[#cec6ad] md:text-base">${escapeHTML(description)}</div>` : ""}
+          ${filtersMarkup ? `<div class="mb-8">${filtersMarkup}</div>` : ""}
+          ${contentMarkup}
         </div>
-        ${filtersMarkup ? `<div class="mb-8">${filtersMarkup}</div>` : ""}
-        ${contentMarkup}
       </div>
     </section>
   `;
@@ -2143,12 +2485,20 @@ function buildProcessPreview() {
     `;
   }
 
+  const processStyle = normalizePricingProcessStyle(state.data.pricing.processStyle);
+  const sectionBorderClass = processStyle === "cards" ? "border-[#fde047]/20" : "border-white/10";
+  const titleClass = processStyle === "cards"
+    ? "mb-10 text-center text-2xl font-bold text-white"
+    : processStyle === "editorial"
+      ? "mx-auto mb-12 w-full max-w-[46rem] text-left text-2xl font-bold text-white"
+      : "mb-8 max-w-2xl text-2xl font-bold text-white";
+
   return `
       <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
-        <div id="process-section" class="mx-auto max-w-screen-xl border-t border-white/10 pt-12">
-          <div class="mb-10 text-center text-2xl font-bold text-white">${escapeHTML(textOrFallback(state.data.pricing.processTitle, "진행 프로세스 및 정책"))}</div>
+        <div id="process-section" class="mx-auto max-w-screen-xl border-t ${sectionBorderClass} pt-12">
+          <div class="${titleClass}">${escapeHTML(textOrFallback(state.data.pricing.processTitle, "진행 프로세스 및 정책"))}</div>
           <div class="grid gap-4">
-            ${renderPreviewProcessSteps()}
+            ${renderPreviewProcessSteps(processStyle)}
           </div>
         </div>
       </section>
@@ -2165,16 +2515,17 @@ function buildStatsProcessPreview() {
 }
 
 function buildPricingPreview() {
+  const pricingColumns = normalizePricingGridColumns(state.data.pricing.gridColumns, DEFAULT_DATA.pricing.gridColumns);
   return `
     <section class="preview-render-root bg-[#16130a] px-6 py-16 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
       <div id="pricing" class="mx-auto max-w-screen-xl">
         <header class="mb-16">
           <div class="mb-4 inline-block rounded-sm bg-white/10 px-3 py-1 text-[0.6875rem] font-bold uppercase tracking-[0.2em] text-[#fde047]">${escapeHTML(textOrFallback(state.data.pricing.sectionEyebrow, "Pricing Template"))}</div>
-          <div class="mb-6 text-4xl font-black leading-[1.1] tracking-tighter text-white md:text-6xl">${escapeHTML(textOrFallback(state.data.pricing.title, "서비스 구조를 바로 안내할 수 있게 준비해두세요."))}</div>
-          <div class="max-w-2xl text-lg leading-relaxed text-[#cec6ad]">${escapeHTML(textOrFallback(state.data.pricing.description, "패키지, 포함 항목, 문의 CTA를 예시로 남겨두었습니다."))}</div>
+          <div class="mb-6 text-4xl font-black leading-[1.1] tracking-tighter text-white md:text-6xl">${escapeWithBreaks(textOrFallback(state.data.pricing.title, "서비스 구조를 바로 안내할 수 있게 준비해두세요."))}</div>
+          <div class="max-w-2xl text-lg leading-relaxed text-[#cec6ad]">${escapeWithBreaks(textOrFallback(state.data.pricing.description, "패키지, 포함 항목, 문의 CTA를 예시로 남겨두었습니다."))}</div>
         </header>
 
-        <div class="grid gap-6 md:grid-cols-2">
+        <div class="preview-plan-grid" data-columns="${escapeHTML(String(pricingColumns))}">
           ${renderPreviewPlanCards()}
         </div>
 
@@ -2204,7 +2555,7 @@ function buildContactFooterPreview() {
           <div class="text-center">
             <span class="mb-6 block text-[0.75rem] uppercase tracking-[0.3em] text-[#fde047] md:text-[0.875rem]">${escapeHTML(textOrFallback(state.data.contact.eyebrow, "CONTACT ME"))}</span>
             <div class="mb-4 text-4xl font-extrabold leading-tight tracking-tight text-white md:text-6xl">${renderPreviewAccentText(textOrFallback(state.data.contact.title, "프로젝트 문의는\n이메일로 남겨주세요."), state.data.contact.titleAccent, "text-[#fde047]")}</div>
-            <div class="mx-auto mb-12 max-w-2xl text-lg text-[#cec6ad] opacity-80">${escapeHTML(textOrFallback(state.data.contact.description, "메일 주소와 응답 정책을 템플릿으로 남겨두었습니다."))}</div>
+            <div class="mx-auto mb-12 max-w-2xl text-lg leading-relaxed text-[#cec6ad] opacity-80">${escapeWithBreaks(textOrFallback(state.data.contact.description, "메일 주소와 응답 정책을 템플릿으로 남겨두었습니다."))}</div>
 
             <div class="group relative inline-flex items-center justify-center rounded-2xl bg-gradient-to-tr from-[#fde047]/20 to-transparent p-1">
               <div class="rounded-xl border border-white/10 bg-[#1e1c12] px-10 py-12 md:px-20 md:py-16">
@@ -2252,7 +2603,7 @@ function buildContactFooterPreview() {
                  : `<div class="flex flex-wrap items-center justify-center gap-4">
                       ${renderPreviewFooterLinks()}
                     </div>`}
-               <div class="text-[0.6875rem] uppercase tracking-[0.15em] text-[#97917a] opacity-60">${escapeHTML(textOrFallback(state.data.site.footer.copy, "© 2026 STUDIO YOUR-NAME. 모든 권리 보유."))}</div>
+               <div class="text-[0.6875rem] uppercase tracking-[0.15em] text-[#97917a] opacity-60">${escapeWithBreaks(textOrFallback(state.data.site.footer.copy, "© 2026 STUDIO YOUR-NAME. 모든 권리 보유."))}</div>
              </div>
            </footer>`
         : `<div class="px-6 pb-12 md:px-8">${previewHiddenBlock("푸터가 꺼져 있습니다.")}</div>`}
@@ -2391,6 +2742,74 @@ function renderNavLinkList() {
   `).join("");
 }
 
+function hasNavLinkPreset(preset) {
+  return state.data.site.nav.links.some((link) => (
+    String(link?.label || "").trim() === preset.label &&
+    String(link?.href || "").trim() === preset.href
+  ));
+}
+
+function renderNavLinkPresetButtons() {
+  const container = $("#nav-link-presets");
+  if (!container) return;
+
+  const allAdded = NAV_LINK_QUICK_PRESETS.every((preset) => hasNavLinkPreset(preset));
+  const allButton = `
+    <button type="button" data-nav-preset="all" ${allAdded ? "disabled" : ""}>
+      <strong>기본 4개 전체 추가</strong>
+      <span>홈, 영상 포트폴리오, 서비스 및 가격, 문의하기를 한 번에 추가합니다.</span>
+    </button>
+  `;
+  const presetButtons = NAV_LINK_QUICK_PRESETS.map((preset) => `
+    <button type="button" data-nav-preset="${escapeHTML(preset.key)}" ${hasNavLinkPreset(preset) ? "disabled" : ""}>
+      <strong>${escapeHTML(preset.label)}</strong>
+      <span>${escapeHTML(preset.href)}</span>
+    </button>
+  `).join("");
+
+  container.innerHTML = `${allButton}${presetButtons}`;
+}
+
+function addNavLinkPreset(presetKey) {
+  if (presetKey === "all") {
+    const missingPresets = NAV_LINK_QUICK_PRESETS.filter((preset) => !hasNavLinkPreset(preset));
+    if (!missingPresets.length) {
+      setStatus("기본 내비 링크 4개가 이미 모두 등록되어 있습니다.", "info");
+      return;
+    }
+
+    state.data.site.nav.links = sortNavLinksByPresetOrder([
+      ...state.data.site.nav.links,
+      ...missingPresets.map((preset) => ({
+        label: preset.label,
+        href: preset.href,
+      })),
+    ]);
+    applyDataChange(`${missingPresets.length}개의 기본 내비 링크를 추가했습니다.`);
+    return;
+  }
+
+  const preset = NAV_LINK_QUICK_PRESETS.find((item) => item.key === presetKey);
+  if (!preset) {
+    setStatus("알 수 없는 내비 링크 프리셋입니다.", "error");
+    return;
+  }
+
+  if (hasNavLinkPreset(preset)) {
+    setStatus(`${preset.label} 링크는 이미 등록되어 있습니다.`, "info");
+    return;
+  }
+
+  state.data.site.nav.links = sortNavLinksByPresetOrder([
+    ...state.data.site.nav.links,
+    {
+      label: preset.label,
+      href: preset.href,
+    },
+  ]);
+  applyDataChange(`${preset.label} 링크를 추가했습니다.`);
+}
+
 function renderHeroActionList() {
   const list = $("#hero-action-list");
   if (!list) return;
@@ -2518,7 +2937,7 @@ function renderHeroResourceEditorList(listSelector, listKey, items, emptyMessage
       </label>
       <label class="field">
         <span>로고 URL</span>
-        <input type="text" value="${escapeHTML(item.logoUrl)}" data-${listKey}-field="logoUrl" placeholder="https://...">
+        <input type="text" value="${escapeHTML(item.logoUrl)}" data-${listKey}-field="logoUrl" placeholder="assets/tool-presets/premiere-pro.svg">
       </label>
       <label class="field">
         <span>이미지 설명</span>
@@ -2756,6 +3175,7 @@ function renderWorksVideoForm() {
 function syncWorksCategoryOrderState() {
   const works = state.data.works || {};
   works.videos = normalizeWorksVideos(works.videos);
+  works.visualPreset = normalizeWorksVisualPreset(works.visualPreset);
   works.displayMode = normalizeWorksDisplayMode(works.displayMode);
   works.gridColumns = normalizeWorksColumnCount(works.gridColumns, DEFAULT_DATA.works.gridColumns);
   works.categoryStackColumns = normalizeWorksColumnCount(works.categoryStackColumns, DEFAULT_DATA.works.categoryStackColumns);
@@ -2768,11 +3188,13 @@ function syncWorksCategoryOrderState() {
 
 function renderWorksDisplaySettings() {
   const works = state.data.works || DEFAULT_DATA.works;
+  const visualPreset = normalizeWorksVisualPreset(works.visualPreset);
   const displayMode = normalizeWorksDisplayMode(works.displayMode);
   const gridGroup = $("#works-grid-settings-group");
   const stackGroup = $("#works-category-stack-settings-group");
   const categoryOrderSection = $("#works-category-order-section");
   const singleSizeField = $("#works-category-stack-single-column-size-field");
+  const visualPresetInput = $("#works-visual-preset");
   const displayModeInput = $("#works-display-mode");
   const gridColumnsInput = $("#works-grid-columns");
   const stackColumnsInput = $("#works-category-stack-columns");
@@ -2780,6 +3202,7 @@ function renderWorksDisplaySettings() {
   const singleSizeInput = $("#works-category-stack-single-column-size");
   const isSingleColumn = normalizeWorksColumnCount(works.categoryStackColumns, DEFAULT_DATA.works.categoryStackColumns) === 1;
 
+  if (visualPresetInput) visualPresetInput.value = visualPreset;
   if (displayModeInput) displayModeInput.value = displayMode;
   if (gridColumnsInput) gridColumnsInput.value = String(normalizeWorksColumnCount(works.gridColumns, DEFAULT_DATA.works.gridColumns));
   if (stackColumnsInput) stackColumnsInput.value = String(normalizeWorksColumnCount(works.categoryStackColumns, DEFAULT_DATA.works.categoryStackColumns));
@@ -2936,7 +3359,7 @@ function renderPricingPlanList() {
   list.innerHTML = state.data.pricing.plans.map((plan, index) => `
     <article class="plan-card" data-plan-index="${index}">
       <div class="plan-card-head">
-        <strong>${escapeHTML(plan.title || `플랜 ${index + 1}`)}</strong>
+        <strong>${escapeWithBreaks(plan.title || `플랜 ${index + 1}`)}</strong>
         ${rowActions("plans", index)}
       </div>
 
@@ -2971,7 +3394,7 @@ function renderPricingPlanList() {
         </div>
         <label class="field span-2">
           <span>제목</span>
-          <input type="text" value="${escapeHTML(plan.title)}" data-plan-field="title">
+          <textarea rows="2" data-plan-field="title">${escapeHTML(plan.title)}</textarea>
         </label>
         <label class="field span-2">
           <span>설명</span>
@@ -3135,14 +3558,27 @@ function renderFooterLinkList() {
   list.innerHTML = `${manualMarkup}${autoMarkup}`;
 }
 
+function renderPricingSettings() {
+  const gridColumnsInput = $("#pricing-grid-columns");
+  const processStyleInput = $("#pricing-process-style");
+  if (gridColumnsInput) {
+    gridColumnsInput.value = String(normalizePricingGridColumns(state.data.pricing?.gridColumns, DEFAULT_DATA.pricing.gridColumns));
+  }
+  if (processStyleInput) {
+    processStyleInput.value = normalizePricingProcessStyle(state.data.pricing?.processStyle);
+  }
+}
+
 function renderAll() {
   syncWorksCategoryOrderState();
   renderDirectInputs();
+  renderPricingSettings();
   renderGitHubRepoField();
   renderContactCardIconPicker();
   renderCheckboxInputs();
   renderSummary();
   renderNavLinkList();
+  renderNavLinkPresetButtons();
   renderHeroActionList();
   renderHeroInfoEditors();
   renderProjectCardList();
@@ -3274,22 +3710,38 @@ async function loadJson(confirmReload = false) {
     const parsed = text.trim() ? JSON.parse(text) : {};
     state.data = normalizeData(parsed);
     renderAll();
+    void ensureGitHubDefaultBranch(state.data.site?.githubRepo);
     setStatus("site.json을 불러왔습니다.", "success");
   } catch (error) {
     state.data = normalizeData({});
     renderAll();
+    void ensureGitHubDefaultBranch(state.data.site?.githubRepo);
     setStatus(`불러오기 실패: ${error.message}. 기본 구조로 시작합니다.`, "error");
   }
 }
 
 async function openGitHubJson() {
-  const githubUrl = resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo);
-  if (!githubUrl) {
+  const effectiveRepo = getEffectiveGitHubRepo(state.data.site.githubRepo, window.location);
+  if (!effectiveRepo) {
     setStatus("GitHub Repo를 입력하거나 GitHub Pages 배포 주소에서 열어주세요.", "error");
     return;
   }
 
-  const opened = window.open(githubUrl, "_blank", "noopener");
+  const githubTab = window.open("", "_blank");
+  await ensureGitHubDefaultBranch(state.data.site.githubRepo, window.location);
+  const githubUrl = resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo);
+  if (!githubUrl) {
+    githubTab?.close();
+    setStatus("GitHub Repo를 입력하거나 GitHub Pages 배포 주소에서 열어주세요.", "error");
+    return;
+  }
+
+  if (githubTab) {
+    githubTab.opener = null;
+    githubTab.location.href = githubUrl;
+  }
+
+  const opened = githubTab || window.open(githubUrl, "_blank", "noopener");
   setStatus(
     opened
       ? "GitHub의 data/site.json 페이지를 새 탭으로 열었습니다."
@@ -3300,11 +3752,19 @@ async function openGitHubJson() {
 
 async function copyAllJson() {
   const json = buildJson();
-  const githubUrl = resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo);
-  const githubTab = githubUrl ? window.open("", "_blank") : null;
+  const effectiveRepo = getEffectiveGitHubRepo(state.data.site.githubRepo, window.location);
+  const githubTab = effectiveRepo ? window.open("", "_blank") : null;
 
   try {
     await navigator.clipboard.writeText(json);
+    if (effectiveRepo) {
+      await ensureGitHubDefaultBranch(state.data.site.githubRepo, window.location);
+    }
+
+    const githubUrl = effectiveRepo
+      ? resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo)
+      : "";
+
     if (githubUrl) {
       if (githubTab) {
         githubTab.opener = null;
@@ -3323,6 +3783,20 @@ async function copyAllJson() {
       setStatus("JSON을 복사했습니다. GitHub 이동은 GitHub Repo가 있거나 GitHub Pages 주소에서만 동작합니다.", "success");
     }
   } catch (error) {
+    const githubUrl = effectiveRepo
+      ? resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo)
+      : "";
+
+    if (githubUrl && githubTab && !githubTab.closed) {
+      githubTab.opener = null;
+      githubTab.location.href = githubUrl;
+      const output = $("#json-output");
+      output?.focus();
+      output?.select();
+      setStatus("클립보드 복사는 막혔지만 GitHub 파일 페이지는 열었습니다. JSON 탭에서 직접 선택해 복사하세요.", "error");
+      return;
+    }
+
     if (githubTab && !githubTab.closed) githubTab.close();
     const output = $("#json-output");
     output?.focus();
@@ -3403,6 +3877,7 @@ function bindEvents() {
   $("#site-github-repo")?.addEventListener("input", (event) => {
     state.data.site.githubRepo = event.target.value;
     renderGitHubRepoField({ preserveInputValue: true });
+    scheduleGitHubDefaultBranchLookup(event.target.value, window.location);
     renderSummary();
     renderFooterLinkList();
     refreshJsonOutput();
@@ -3410,9 +3885,25 @@ function bindEvents() {
     setStatus("GitHub Repo 설정이 반영되었습니다.", "success");
   });
 
+  $("#pricing-grid-columns")?.addEventListener("change", (event) => {
+    state.data.pricing.gridColumns = normalizePricingGridColumns(event.target.value, DEFAULT_DATA.pricing.gridColumns);
+    applyMinorChange("가격 카드 열 수가 반영되었습니다.");
+  });
+
+  $("#pricing-process-style")?.addEventListener("change", (event) => {
+    state.data.pricing.processStyle = normalizePricingProcessStyle(event.target.value);
+    applyMinorChange("프로세스 프리셋이 반영되었습니다.");
+  });
+
   $("#add-nav-link")?.addEventListener("click", () => {
     state.data.site.nav.links.push({ label: "", href: "" });
     applyDataChange("내비 링크를 추가했습니다.");
+  });
+
+  $("#nav-link-presets")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-nav-preset]");
+    if (!button) return;
+    addNavLinkPreset(button.dataset.navPreset);
   });
 
   $("#nav-link-list")?.addEventListener("input", (event) => {
@@ -3421,6 +3912,7 @@ function bindEvents() {
     if (!row || !field) return;
     const index = Number(row.dataset.navIndex);
     state.data.site.nav.links[index][field] = event.target.value;
+    renderNavLinkPresetButtons();
     applyMinorChange("내비 링크가 반영되었습니다.");
   });
 
@@ -3566,6 +4058,11 @@ function bindEvents() {
   $("#works-display-mode")?.addEventListener("change", (event) => {
     state.data.works.displayMode = normalizeWorksDisplayMode(event.target.value);
     applyMinorChange("영상 포트폴리오 표시 방식이 반영되었습니다.");
+  });
+
+  $("#works-visual-preset")?.addEventListener("change", (event) => {
+    state.data.works.visualPreset = normalizeWorksVisualPreset(event.target.value);
+    applyMinorChange("영상 포트폴리오 비주얼 프리셋이 반영되었습니다.");
   });
 
   $("#works-grid-columns")?.addEventListener("change", (event) => {
