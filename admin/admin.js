@@ -1,4 +1,5 @@
 const jsonPath = "../data/site.json";
+const exampleJsonPath = "../data/example.site.json";
 const githubJsonPath = "data/site.json";
 const indexHtmlPath = "../index.html";
 const fallbackGitHubBranch = "main";
@@ -6,6 +7,7 @@ const embedCardTabs = new Set(["embed-card", "embed-image"]);
 const socialPreviewWidth = 1200;
 const socialPreviewHeight = 630;
 const socialPreviewAspect = socialPreviewWidth / socialPreviewHeight;
+const previewFontFamilyStyle = "font-family:'Epilogue', 'Segoe UI', 'Malgun Gothic', '맑은 고딕', Arial, sans-serif;";
 const previewTargets = {
   brand: {
     title: "브랜드 / 내비 미리보기",
@@ -66,8 +68,8 @@ const previewTargets = {
 const DEFAULT_EMBED_META = {
   title: "영상 포트폴리오 템플릿",
   description: "영상 편집자와 크리에이터를 위한 정적 포트폴리오 템플릿입니다. site.json만 수정해 브랜드, 작업물, 가격, 문의 정보를 구성할 수 있습니다.",
-  image: "https://example.github.io/video-portfolio/assets/social-preview.png",
-  url: "https://example.github.io/video-portfolio/",
+  image: "",
+  url: "",
   imageAlt: "영상 포트폴리오 템플릿 공유 이미지",
   twitterCard: "summary_large_image",
 };
@@ -597,11 +599,12 @@ function setGitHubDefaultBranch(repo, branch, source = "fetched") {
   return state.githubDefaultBranch;
 }
 
-function buildGitHubSiteJsonUrl(repo, branch = getGitHubDefaultBranch(repo)) {
+function buildGitHubSiteJsonUrl(repo, branch = getGitHubDefaultBranch(repo), mode = "blob") {
   const normalizedRepo = normalizeGitHubRepo(repo);
   const normalizedBranch = normalizeGitHubBranch(branch) || fallbackGitHubBranch;
+  const safeMode = mode === "edit" ? "edit" : "blob";
   return normalizedRepo
-    ? `https://github.com/${normalizedRepo}/blob/${normalizedBranch}/${githubJsonPath}`
+    ? `https://github.com/${normalizedRepo}/${safeMode}/${normalizedBranch}/${githubJsonPath}`
     : "";
 }
 
@@ -629,12 +632,42 @@ function resolveGitHubPagesBaseUrl(locationRef = window.location, repoValue = st
   return buildGitHubPagesBaseUrl(repo);
 }
 
+function resolveCurrentSiteBaseUrl(locationRef = window.location) {
+  try {
+    const url = new URL(locationRef.href);
+    if (url.protocol === "file:") return "";
+
+    let pathname = url.pathname || "/";
+    const lowerPathname = pathname.toLowerCase();
+    const adminPathIndex = lowerPathname.indexOf("/admin/");
+
+    if (adminPathIndex !== -1) {
+      pathname = pathname.slice(0, adminPathIndex + 1);
+    } else if (lowerPathname.endsWith("/admin")) {
+      pathname = pathname.slice(0, -"/admin".length) || "/";
+    } else if (/\/[^/]*\.html?$/i.test(pathname)) {
+      pathname = pathname.replace(/\/[^/]*$/, "/");
+    }
+
+    if (!pathname.endsWith("/")) pathname = `${pathname}/`;
+    return `${url.origin}${pathname}`;
+  } catch (error) {
+    return "";
+  }
+}
+
 function getDefaultEmbedMeta(locationRef = window.location, repoValue = state.data?.site?.githubRepo) {
-  const baseUrl = resolveGitHubPagesBaseUrl(locationRef, repoValue);
+  const baseUrl = resolveCurrentSiteBaseUrl(locationRef) || resolveGitHubPagesBaseUrl(locationRef, repoValue);
+  const site = state?.data?.site || DEFAULT_DATA.site;
+  const title = compactText(site.title) || DEFAULT_EMBED_META.title;
+  const description = compactText(site.description) || DEFAULT_EMBED_META.description;
   return {
     ...DEFAULT_EMBED_META,
+    title,
+    description,
     url: baseUrl || DEFAULT_EMBED_META.url,
     image: baseUrl ? `${baseUrl}assets/social-preview.png` : DEFAULT_EMBED_META.image,
+    imageAlt: `${title} 공유 이미지`,
   };
 }
 
@@ -677,9 +710,9 @@ function getEffectiveFooterLinks(links = state.data?.site?.footer?.links, repoVa
   return autoLink ? [...normalizedLinks, autoLink] : normalizedLinks;
 }
 
-function resolveGitHubSiteJsonUrl(locationRef = window.location, repoValue = state.data?.site?.githubRepo) {
+function resolveGitHubSiteJsonUrl(locationRef = window.location, repoValue = state.data?.site?.githubRepo, mode = "blob") {
   const effectiveRepo = getEffectiveGitHubRepo(repoValue, locationRef);
-  return effectiveRepo ? buildGitHubSiteJsonUrl(effectiveRepo, getGitHubDefaultBranch(effectiveRepo)) : "";
+  return effectiveRepo ? buildGitHubSiteJsonUrl(effectiveRepo, getGitHubDefaultBranch(effectiveRepo), mode) : "";
 }
 
 async function ensureGitHubDefaultBranch(repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
@@ -1782,28 +1815,39 @@ function metaTag(propertyType, key, value) {
   return `<meta ${propertyType}="${escapeAttribute(key)}" content="${escapeAttribute(value)}">`;
 }
 
+function getEmptyEmbedMeta() {
+  return {
+    title: "",
+    description: "",
+    image: "",
+    url: "",
+    imageAlt: "",
+    twitterCard: "summary_large_image",
+  };
+}
+
 function buildEmbedHTML(meta = state.embedMeta) {
-  const defaults = getDefaultEmbedMeta();
-  const title = compactText(meta.title) || defaults.title;
+  const title = compactText(meta.title);
   const description = compactText(meta.description);
-  const image = compactText(meta.image) || defaults.image;
-  const url = compactText(meta.url) || defaults.url;
+  const image = compactText(meta.image);
+  const url = compactText(meta.url);
   const imageAlt = compactText(meta.imageAlt);
+  const twitterCard = compactText(meta.twitterCard) || "summary_large_image";
 
   return [
     "<!-- OG START -->",
     `<title>${escapeAttribute(title)}</title>`,
     metaTag("property", "og:title", title),
-    description ? metaTag("property", "og:description", description) : "",
+    metaTag("property", "og:description", description),
     metaTag("property", "og:image", image),
     metaTag("property", "og:url", url),
-    imageAlt ? metaTag("property", "og:image:alt", imageAlt) : "",
-    metaTag("name", "twitter:card", "summary_large_image"),
+    metaTag("property", "og:image:alt", imageAlt),
+    metaTag("name", "twitter:card", twitterCard),
     metaTag("name", "twitter:title", title),
-    description ? metaTag("name", "twitter:description", description) : "",
+    metaTag("name", "twitter:description", description),
     metaTag("name", "twitter:image", image),
     "<!-- OG END -->",
-  ].filter(Boolean).join("\n");
+  ].join("\n");
 }
 
 function getMetaContent(doc, selector) {
@@ -1813,16 +1857,15 @@ function getMetaContent(doc, selector) {
 function parseEmbedHTML(html) {
   const source = String(html || "");
   const doc = new DOMParser().parseFromString(`<head>${source}</head>`, "text/html");
-  const defaults = getDefaultEmbedMeta();
-  const title = compactText(doc.querySelector("title")?.textContent) || defaults.title;
+  const title = compactText(doc.querySelector("title")?.textContent);
   const description = getMetaContent(doc, 'meta[property="og:description"]')
     || getMetaContent(doc, 'meta[name="twitter:description"]')
     || "";
   const image = getMetaContent(doc, 'meta[property="og:image"]')
     || getMetaContent(doc, 'meta[name="twitter:image"]')
-    || defaults.image;
-  const url = getMetaContent(doc, 'meta[property="og:url"]') || defaults.url;
-  const imageAlt = getMetaContent(doc, 'meta[property="og:image:alt"]') || defaults.imageAlt;
+    || "";
+  const url = getMetaContent(doc, 'meta[property="og:url"]') || "";
+  const imageAlt = getMetaContent(doc, 'meta[property="og:image:alt"]') || "";
 
   return {
     title,
@@ -1854,6 +1897,20 @@ function fallbackEmbedBlockFromHTML(html) {
   return buildEmbedHTML(meta);
 }
 
+function shouldUseGeneratedEmbedUrl(value) {
+  return !compactText(value);
+}
+
+function normalizeLoadedEmbedHTML(html) {
+  const meta = parseEmbedHTML(html);
+  const defaults = getDefaultEmbedMeta();
+  return buildEmbedHTML({
+    ...meta,
+    url: shouldUseGeneratedEmbedUrl(meta.url) ? defaults.url : meta.url,
+    image: shouldUseGeneratedEmbedUrl(meta.image) ? defaults.image : meta.image,
+  });
+}
+
 function syncEmbedFields(meta) {
   const fields = {
     "embed-meta-title": meta.title,
@@ -1869,8 +1926,7 @@ function syncEmbedFields(meta) {
 }
 
 function renderEmbedPreview(meta = state.embedMeta) {
-  const defaults = getDefaultEmbedMeta();
-  const title = compactText(meta.title) || defaults.title;
+  const title = compactText(meta.title);
   const description = compactText(meta.description);
   const image = compactText(meta.image);
   const url = compactText(meta.url);
@@ -1902,7 +1958,7 @@ function renderEmbedPreview(meta = state.embedMeta) {
   const titleElement = $("#embed-preview-title");
   const descriptionElement = $("#embed-preview-description");
   const domainElement = $("#embed-preview-domain");
-  if (titleElement) titleElement.textContent = title;
+  if (titleElement) titleElement.textContent = title || "카드 제목이 비어 있습니다.";
   if (domainElement) domainElement.textContent = domain;
   if (descriptionElement) {
     descriptionElement.textContent = description;
@@ -1911,12 +1967,13 @@ function renderEmbedPreview(meta = state.embedMeta) {
 }
 
 function syncEmbedEditorFromHTML(html, { updateTextarea = false } = {}) {
-  const source = String(html || "").trim() || buildEmbedHTML(getDefaultEmbedMeta());
+  const raw = String(html || "").trim();
+  const source = raw || buildEmbedHTML(getEmptyEmbedMeta());
   state.embedHtml = source;
   state.embedMeta = parseEmbedHTML(source);
   syncEmbedFields(state.embedMeta);
   renderEmbedPreview(state.embedMeta);
-  if (updateTextarea) {
+  if (updateTextarea || !raw) {
     const output = $("#embed-html-output");
     if (output) output.value = source;
   }
@@ -1950,7 +2007,7 @@ async function loadEmbedHTMLFromIndex({ force = false } = {}) {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const html = await response.text();
     const block = extractOGBlock(html);
-    const nextHTML = block || fallbackEmbedBlockFromHTML(html);
+    const nextHTML = block ? normalizeLoadedEmbedHTML(block) : fallbackEmbedBlockFromHTML(html);
     state.embedLoaded = true;
     syncEmbedEditorFromHTML(nextHTML, { updateTextarea: true });
     if (status) {
@@ -1967,13 +2024,42 @@ async function loadEmbedHTMLFromIndex({ force = false } = {}) {
 
 async function copyEmbedHTML() {
   const output = $("#embed-html-output");
-  const code = output?.value || state.embedHtml || buildEmbedHTML(getDefaultEmbedMeta());
+  const code = output ? output.value : state.embedHtml || buildEmbedHTML(getDefaultEmbedMeta());
+  const effectiveRepo = getEffectiveGitHubRepo(state.data.site.githubRepo, window.location);
+  const githubTab = effectiveRepo ? window.open("", "_blank") : null;
+  let copied = false;
+
   try {
     await navigator.clipboard.writeText(code);
-    setStatus("임베드 카드 HTML 코드를 복사했습니다.", "success");
+    copied = true;
   } catch (error) {
     output?.focus();
     output?.select();
+  }
+
+  if (effectiveRepo) {
+    await ensureGitHubDefaultBranch(state.data.site.githubRepo, window.location);
+  }
+
+  const githubUrl = effectiveRepo ? buildGitHubRepoFileUrl("index.html", "edit") : "";
+  if (githubUrl) {
+    if (githubTab) {
+      githubTab.opener = null;
+      githubTab.location.href = githubUrl;
+    } else {
+      window.open(githubUrl, "_blank", "noopener");
+    }
+  } else if (githubTab && !githubTab.closed) {
+    githubTab.close();
+  }
+
+  if (copied && githubUrl) {
+    setStatus("임베드 카드 HTML 코드를 복사하고 GitHub index.html 편집 화면을 열었습니다.", "success");
+  } else if (copied) {
+    setStatus("임베드 카드 HTML 코드를 복사했습니다. GitHub 이동은 GitHub Repo가 있거나 GitHub Pages 주소에서만 동작합니다.", "success");
+  } else if (githubUrl) {
+    setStatus("클립보드 복사는 막혔지만 GitHub index.html 편집 화면은 열었습니다. 코드 영역을 직접 복사해주세요.", "error");
+  } else {
     setStatus("클립보드 복사가 막혔습니다. 코드 영역을 직접 복사해주세요.", "error");
   }
 }
@@ -2960,7 +3046,7 @@ function renderPreviewFooterLinks() {
 
 function buildBrandPreview() {
   return `
-    <section class="preview-render-root bg-[#16130a] text-[#e9e2d2]" style="font-family:'Epilogue', sans-serif;">
+    <section class="preview-render-root bg-[#16130a] text-[#e9e2d2]" style="${previewFontFamilyStyle}">
       <div class="border-b border-white/10 bg-[#16130a]/85 backdrop-blur-xl">
         <div class="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-6 py-4 md:px-8 md:py-6">
           <div class="text-2xl font-black uppercase tracking-tighter text-white">
@@ -2998,7 +3084,7 @@ function buildHeroPreview() {
       : "";
 
   return `
-    <section class="preview-render-root relative overflow-hidden bg-[#16130a] text-[#e9e2d2]" style="font-family:'Epilogue', sans-serif;">
+    <section class="preview-render-root relative overflow-hidden bg-[#16130a] text-[#e9e2d2]" style="${previewFontFamilyStyle}">
       ${backgroundMarkup}
       <div class="absolute inset-0" style="background:linear-gradient(to bottom, rgba(22, 19, 10, 0.32), rgba(22, 19, 10, 0.72), rgba(22, 19, 10, 0.98));"></div>
       <div class="relative mx-auto flex h-full max-w-screen-2xl items-start px-6 pt-16 pb-16 md:px-8 md:pt-24">
@@ -3034,14 +3120,14 @@ function buildHeroPreview() {
 function buildProjectsPreview() {
   if (state.data.projects.enabled === false) {
     return `
-      <section class="preview-render-root bg-[#16130a] px-6 py-16 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
+      <section class="preview-render-root bg-[#16130a] px-6 py-16 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
         <div class="mx-auto max-w-screen-2xl">${previewHiddenBlock("프로젝트 섹션이 꺼져 있습니다. 내부 작업물 링크는 영상 포트폴리오로 이동합니다.")}</div>
       </section>
     `;
   }
 
   return `
-    <section class="preview-render-root bg-[#16130a] px-6 py-16 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
+    <section class="preview-render-root bg-[#16130a] px-6 py-16 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
       <div class="mx-auto max-w-screen-2xl">
         <div class="mb-16 flex flex-col gap-6 border-b border-white/10 pb-10 md:flex-row md:items-end md:justify-between">
           <div>
@@ -3061,14 +3147,14 @@ function buildProjectsPreview() {
 function buildStatsPreview() {
   if (state.data.stats.enabled === false) {
     return `
-      <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
+      <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
         <div class="mx-auto max-w-screen-2xl">${previewHiddenBlock("통계 섹션이 꺼져 있습니다.")}</div>
       </section>
     `;
   }
 
   return `
-    <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
+    <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
       <div id="stats" class="mx-auto max-w-screen-2xl border-t border-white/10 pt-10">
         <div class="grid gap-6 md:grid-cols-4">
           ${renderPreviewStatsItems()}
@@ -3091,7 +3177,7 @@ function buildWorksPreview() {
   const displayMode = normalizeWorksDisplayMode(works.displayMode);
   if (!hasSectionShell) {
     return `
-      <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
+      <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
         <div class="mx-auto max-w-screen-2xl">${previewHiddenBlock("영상 항목을 추가하면 작업물 섹션이 표시됩니다.")}</div>
       </section>
     `;
@@ -3132,7 +3218,7 @@ function buildWorksPreview() {
     : "max-w-2xl border-l border-white/10 pl-6 text-sm leading-relaxed text-[#cec6ad] md:text-base";
 
   return `
-    <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
+    <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
       <div id="works" class="mx-auto max-w-screen-2xl border-t border-white/10 pt-12">
         <div class="${shellClass}">
           <div class="${headingClass}">
@@ -3156,7 +3242,7 @@ function buildWorksPreview() {
 function buildProcessPreview() {
   if (state.data.pricing.processEnabled === false) {
     return `
-      <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
+      <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
         <div class="mx-auto max-w-screen-xl">${previewHiddenBlock("진행 프로세스 섹션이 꺼져 있습니다.")}</div>
       </section>
     `;
@@ -3171,7 +3257,7 @@ function buildProcessPreview() {
       : "mb-8 max-w-2xl text-2xl font-bold text-white";
 
   return `
-      <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
+      <section class="preview-render-root bg-[#16130a] px-6 py-14 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
         <div id="process-section" class="mx-auto max-w-screen-xl border-t ${sectionBorderClass} pt-12">
           <div class="${titleClass}">${escapeHTML(textOrFallback(state.data.pricing.processTitle, "진행 프로세스 및 정책"))}</div>
           <div class="grid gap-4">
@@ -3194,7 +3280,7 @@ function buildStatsProcessPreview() {
 function buildPricingPreview() {
   const pricingColumns = normalizePricingGridColumns(state.data.pricing.gridColumns, DEFAULT_DATA.pricing.gridColumns);
   return `
-    <section class="preview-render-root bg-[#16130a] px-6 py-16 text-[#e9e2d2] md:px-8" style="font-family:'Epilogue', sans-serif;">
+    <section class="preview-render-root bg-[#16130a] px-6 py-16 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
       <div id="pricing" class="mx-auto max-w-screen-xl">
         <header class="mb-16">
           <div class="mb-4 inline-block rounded-sm bg-white/10 px-3 py-1 text-[0.6875rem] font-bold uppercase tracking-[0.2em] text-[#fde047]">${escapeHTML(textOrFallback(state.data.pricing.sectionEyebrow, "Pricing Template"))}</div>
@@ -3226,7 +3312,7 @@ function buildContactFooterPreview() {
       : "md:grid-cols-3";
 
   return `
-    <section class="preview-render-root bg-[#16130a] text-[#e9e2d2]" style="font-family:'Epilogue', sans-serif;">
+    <section class="preview-render-root bg-[#16130a] text-[#e9e2d2]" style="${previewFontFamilyStyle}">
       <div id="contact" class="flex min-h-[520px] items-center justify-center px-6 pt-20 pb-16 md:px-8">
         <div class="mx-auto max-w-screen-2xl">
           <div class="text-center">
@@ -4380,6 +4466,13 @@ function listByKey(listKey) {
   }
 }
 
+async function fetchJsonData(path, options = {}) {
+  const response = await fetch(path, options);
+  if (!response.ok) throw new Error(`${path} 로드 실패: ${response.status}`);
+  const text = await response.text();
+  return text.trim() ? JSON.parse(text) : {};
+}
+
 async function loadJson(confirmReload = false) {
   if (confirmReload && !window.confirm("현재 편집 중인 내용을 버리고 초기 JSON을 다시 불러올까요?")) {
     return;
@@ -4387,19 +4480,24 @@ async function loadJson(confirmReload = false) {
 
   try {
     setStatus("데이터를 불러오는 중입니다...", "info");
-    const response = await fetch(jsonPath, { cache: "no-store" });
-    if (!response.ok) throw new Error(`로드 실패: ${response.status}`);
-    const text = await response.text();
-    const parsed = text.trim() ? JSON.parse(text) : {};
+    const parsed = await fetchJsonData(jsonPath, { cache: "no-store" });
     state.data = normalizeData(parsed);
     renderAll();
     void ensureGitHubDefaultBranch(state.data.site?.githubRepo);
     setStatus("site.json을 불러왔습니다.", "success");
   } catch (error) {
-    state.data = normalizeData({});
-    renderAll();
-    void ensureGitHubDefaultBranch(state.data.site?.githubRepo);
-    setStatus(`불러오기 실패: ${error.message}. 기본 구조로 시작합니다.`, "error");
+    try {
+      const parsed = await fetchJsonData(exampleJsonPath, { cache: "no-store" });
+      state.data = normalizeData(parsed);
+      renderAll();
+      void ensureGitHubDefaultBranch(state.data.site?.githubRepo);
+      setStatus(`site.json을 불러오지 못해 example.site.json으로 시작합니다: ${error.message}`, "info");
+    } catch (fallbackError) {
+      state.data = normalizeData({});
+      renderAll();
+      void ensureGitHubDefaultBranch(state.data.site?.githubRepo);
+      setStatus(`불러오기 실패: ${error.message}. example.site.json도 사용할 수 없어 기본 구조로 시작합니다.`, "error");
+    }
   }
 }
 
@@ -4445,20 +4543,20 @@ async function copyAllJson() {
     }
 
     const githubUrl = effectiveRepo
-      ? resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo)
+      ? resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo, "edit")
       : "";
 
     if (githubUrl) {
       if (githubTab) {
         githubTab.opener = null;
         githubTab.location.href = githubUrl;
-        setStatus("JSON을 복사하고 GitHub 파일 페이지를 새 탭으로 열었습니다.", "success");
+        setStatus("JSON을 복사하고 GitHub data/site.json 편집 화면을 열었습니다.", "success");
       } else {
         const opened = window.open(githubUrl, "_blank", "noopener");
         setStatus(
           opened
-            ? "JSON을 복사하고 GitHub 파일 페이지를 새 탭으로 열었습니다."
-            : "JSON은 복사했지만 팝업 차단으로 GitHub 페이지를 열지 못했습니다.",
+            ? "JSON을 복사하고 GitHub data/site.json 편집 화면을 열었습니다."
+            : "JSON은 복사했지만 팝업 차단으로 GitHub 편집 화면을 열지 못했습니다.",
           opened ? "success" : "error"
         );
       }
@@ -4467,7 +4565,7 @@ async function copyAllJson() {
     }
   } catch (error) {
     const githubUrl = effectiveRepo
-      ? resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo)
+      ? resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo, "edit")
       : "";
 
     if (githubUrl && githubTab && !githubTab.closed) {
@@ -4476,7 +4574,7 @@ async function copyAllJson() {
       const output = $("#json-output");
       output?.focus();
       output?.select();
-      setStatus("클립보드 복사는 막혔지만 GitHub 파일 페이지는 열었습니다. JSON 탭에서 직접 선택해 복사하세요.", "error");
+      setStatus("클립보드 복사는 막혔지만 GitHub data/site.json 편집 화면은 열었습니다. JSON 탭에서 직접 선택해 복사하세요.", "error");
       return;
     }
 
@@ -4553,7 +4651,6 @@ function bindEvents() {
   $("#open-github-json")?.addEventListener("click", openGitHubJson);
   $("#reload-embed-html")?.addEventListener("click", () => loadEmbedHTMLFromIndex({ force: true }));
   $("#copy-embed-html")?.addEventListener("click", copyEmbedHTML);
-  $("#open-index-html")?.addEventListener("click", () => openGitHubRepoPath("index.html", "edit"));
   $("#open-assets-upload")?.addEventListener("click", openAssetsUploadPage);
   $("#download-social-preview")?.addEventListener("click", downloadSocialPreviewPNG);
 

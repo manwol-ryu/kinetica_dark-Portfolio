@@ -745,8 +745,7 @@
           <section class="editor-card detail-section guide-card">
             <h3>임베드 카드 설정 방법</h3>
             <ol class="guide-steps">
-              <li><strong>HTML 코드 복사</strong>를 눌러 <code>OG START/END</code> 블록 전체를 복사합니다.</li>
-              <li><strong>index.html 열기</strong>를 눌러 GitHub의 <code>index.html</code> 편집 화면을 엽니다.</li>
+              <li><strong>HTML 코드 복사</strong>를 눌러 <code>OG START/END</code> 블록 전체를 복사하고 GitHub의 <code>index.html</code> 편집 화면을 엽니다.</li>
               <li>파일 상단에서 <code>&lt;!-- OG START --&gt;</code>부터 <code>&lt;!-- OG END --&gt;</code>까지 기존 코드를 지웁니다.</li>
               <li>복사한 코드를 같은 위치에 붙여넣고 저장합니다.</li>
               <li>이미지를 바꿨다면 <code>이미지 수정</code> 페이지에서 만든 <code>social-preview.png</code>를 <code>assets/</code>에 업로드하세요.</li>
@@ -774,9 +773,9 @@
             <h3>메타데이터 수정</h3>
             <div class="form-grid">
               <label class="field" for="embed-meta-title"><span>카드 제목</span><input id="embed-meta-title" type="text" placeholder="영상 포트폴리오 템플릿"></label>
-              <label class="field" for="embed-meta-url"><span>페이지 URL</span><input id="embed-meta-url" type="text" placeholder="https://example.github.io/video-portfolio/"></label>
+              <label class="field" for="embed-meta-url"><span>페이지 URL</span><input id="embed-meta-url" type="text" placeholder="현재 사이트 주소 기준으로 자동 생성됩니다."></label>
               <label class="field span-2" for="embed-meta-description"><span>카드 설명</span><textarea id="embed-meta-description" rows="3" placeholder="영상 편집자와 크리에이터를 위한 정적 포트폴리오 템플릿입니다. site.json만 수정해 브랜드, 작업물, 가격, 문의 정보를 구성할 수 있습니다."></textarea></label>
-              <label class="field span-2" for="embed-meta-image"><span>대표 이미지 URL</span><input id="embed-meta-image" type="text" placeholder="https://example.github.io/video-portfolio/assets/social-preview.png"></label>
+              <label class="field span-2" for="embed-meta-image"><span>대표 이미지 URL</span><input id="embed-meta-image" type="text" placeholder="현재 사이트 주소 기준으로 assets/social-preview.png가 자동 생성됩니다."></label>
               <label class="field span-2" for="embed-meta-image-alt"><span>이미지 대체 문구</span><input id="embed-meta-image-alt" type="text" placeholder="영상 포트폴리오 템플릿 공유 이미지"></label>
             </div>
           </section>
@@ -786,7 +785,6 @@
               <h3>코드 복사하기</h3>
               <div class="url-actions">
                 <button class="primary-action" id="copy-embed-html" type="button">HTML 코드 복사</button>
-                <button class="primary-action" id="open-index-html" type="button">index.html 열기</button>
               </div>
             </div>
             <label class="field" for="embed-html-output">
@@ -814,7 +812,7 @@
               <li>임베드 카드 미리보기에서 1200×630 카드 이미지가 의도한 구도인지 확인합니다.</li>
               <li><strong>PNG 다운로드</strong>를 누르면 <code>social-preview.png</code> 파일로 저장됩니다.</li>
               <li><strong>assets 업로드 페이지 열기</strong>를 눌러 GitHub 레포의 <code>assets/</code> 폴더에 업로드합니다.</li>
-              <li>업로드 후 <code>임베드카드 수정</code> 페이지에서 대표 이미지 URL을 <code>https://example.github.io/video-portfolio/assets/social-preview.png</code>처럼 배포된 절대 URL로 설정합니다.</li>
+              <li>업로드 후 <code>임베드카드 수정</code> 페이지에서 대표 이미지 URL을 현재 배포 주소의 <code>assets/social-preview.png</code> 절대 URL로 설정합니다.</li>
             </ol>
           </section>
 
