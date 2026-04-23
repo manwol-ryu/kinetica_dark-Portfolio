@@ -153,6 +153,16 @@
             </div>
             <div class="managed-list" id="nav-link-list"></div>
           </section>
+
+          <section class="editor-card detail-section nav-test-session">
+            <div class="section-row-head">
+              <div>
+                <h3>내비 테스트 세션</h3>
+                <p class="field-note">프로젝트/영상 포트폴리오 표시 상태 4가지와 다른 페이지 이동, 빠른 추가 동작을 함께 확인합니다.</p>
+              </div>
+            </div>
+            <div id="nav-test-session-list" class="nav-test-grid"></div>
+          </section>
         </section>
 
         <section class="tab-panel" id="panel-hero" data-panel="hero">
@@ -344,7 +354,7 @@
                 <span>프로젝트 섹션 표시</span>
               </label>
             </div>
-            <p class="field-note">끄면 공개 페이지의 프로젝트 섹션은 숨겨지고, 내부 `#projects` 링크는 자동으로 영상 포트폴리오 `#works`로 연결됩니다.</p>
+            <p class="field-note">끄면 공개 페이지의 프로젝트 섹션은 숨겨지고, 내부 <code>#projects</code> 링크는 영상 포트폴리오 또는 홈으로 자동 연결됩니다.</p>
           </section>
 
           <section class="editor-card detail-section">
@@ -372,6 +382,17 @@
               <p>표시 방식과 카테고리 정렬을 먼저 정하고, 아래에서 YouTube 영상을 등록해 전체 레이아웃을 완성합니다.</p>
             </div>
           </div>
+
+          <section class="editor-card detail-section">
+            <h3>섹션 표시</h3>
+            <div class="toggle-grid">
+              <label class="toggle-field" for="works-enabled">
+                <input id="works-enabled" type="checkbox">
+                <span>영상 포트폴리오 섹션 표시</span>
+              </label>
+            </div>
+            <p class="field-note">끄면 공개 페이지의 영상 포트폴리오 섹션은 숨겨지고, 내부 <code>#works</code>/<code>#work</code> 링크는 표시 가능한 섹션으로 자동 연결됩니다.</p>
+          </section>
 
           <section class="editor-card detail-section">
             <div class="section-row-head">
@@ -770,7 +791,10 @@
           </section>
 
           <section class="editor-card detail-section">
-            <h3>메타데이터 수정</h3>
+            <div class="section-row-head">
+              <h3>메타데이터 수정</h3>
+              <button class="danger-action" id="toggle-embed-image-meta" type="button">이미지 제거</button>
+            </div>
             <div class="form-grid">
               <label class="field" for="embed-meta-title"><span>카드 제목</span><input id="embed-meta-title" type="text" placeholder="영상 포트폴리오 템플릿"></label>
               <label class="field" for="embed-meta-url"><span>페이지 URL</span><input id="embed-meta-url" type="text" placeholder="현재 사이트 주소 기준으로 자동 생성됩니다."></label>
@@ -779,9 +803,10 @@
                 <textarea id="embed-meta-description" rows="3" placeholder="영상 편집자와 크리에이터를 위한 정적 포트폴리오 템플릿입니다. site.json만 수정해 브랜드, 작업물, 가격, 문의 정보를 구성할 수 있습니다."></textarea>
                 <span class="field-note">띄어쓰기와 줄바꿈은 어드민 코드/미리보기에서 보존됩니다. 다만 Discord, Notion 같은 외부 플랫폼은 자체 규칙으로 줄바꿈을 무시할 수 있습니다.</span>
               </label>
-              <label class="field span-2" for="embed-meta-image"><span>대표 이미지 URL</span><input id="embed-meta-image" type="text" placeholder="현재 사이트 주소 기준으로 assets/social-preview.png가 자동 생성됩니다."></label>
-              <label class="field span-2" for="embed-meta-image-alt"><span>이미지 대체 문구</span><input id="embed-meta-image-alt" type="text" placeholder="영상 포트폴리오 템플릿 공유 이미지"></label>
+              <label class="field span-2" for="embed-meta-image" id="embed-meta-image-field"><span>대표 이미지 URL</span><input id="embed-meta-image" type="text" placeholder="현재 사이트 주소 기준으로 assets/social-preview.png가 자동 생성됩니다."></label>
+              <label class="field span-2" for="embed-meta-image-alt" id="embed-meta-image-alt-field"><span>이미지 대체 문구</span><input id="embed-meta-image-alt" type="text" placeholder="영상 포트폴리오 템플릿 공유 이미지"></label>
             </div>
+            <p class="field-note" id="embed-image-meta-note"></p>
           </section>
 
           <section class="editor-card detail-section">
