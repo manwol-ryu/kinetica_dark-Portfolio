@@ -1509,6 +1509,7 @@ h3 {
   color: #78aefc;
   font-size: 18px;
   line-height: 1.25;
+  white-space: pre-wrap;
 }
 
 .embed-preview-body p {
@@ -1516,6 +1517,7 @@ h3 {
   color: #f1f3f8;
   font-size: 14px;
   line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .embed-code-output {

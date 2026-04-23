@@ -4,9 +4,17 @@ const githubJsonPath = "data/site.json";
 const indexHtmlPath = "../index.html";
 const fallbackGitHubBranch = "main";
 const embedCardTabs = new Set(["embed-card", "embed-image"]);
-const socialPreviewWidth = 1200;
-const socialPreviewHeight = 630;
-const socialPreviewAspect = socialPreviewWidth / socialPreviewHeight;
+const socialPreviewPresets = Object.freeze([
+  { id: "og-191", label: "OG 권장 1.91:1 · 1200×630", width: 1200, height: 630 },
+  { id: "twitter-2-1", label: "Twitter/X 2:1 · 1200×600", width: 1200, height: 600 },
+  { id: "wide-16-9", label: "16:9 · 1200×675", width: 1200, height: 675 },
+  { id: "landscape-3-2", label: "3:2 · 1200×800", width: 1200, height: 800 },
+  { id: "classic-4-3", label: "4:3 · 1200×900", width: 1200, height: 900 },
+  { id: "square-1-1", label: "1:1 · 1200×1200", width: 1200, height: 1200 },
+  { id: "portrait-4-5", label: "4:5 · 1080×1350", width: 1080, height: 1350 },
+  { id: "story-9-16", label: "9:16 · 1080×1920", width: 1080, height: 1920 },
+]);
+const defaultSocialPreviewPresetId = socialPreviewPresets[0].id;
 const previewFontFamilyStyle = "font-family:'Epilogue', 'Segoe UI', 'Malgun Gothic', '맑은 고딕', Arial, sans-serif;";
 const previewTargets = {
   brand: {
@@ -262,6 +270,7 @@ const state = {
   cropInteractionStartX: 0,
   cropInteractionStartY: 0,
   cropInteractionStartSelection: null,
+  socialPreviewPresetId: defaultSocialPreviewPresetId,
 };
 
 const NAV_LINK_QUICK_PRESETS = Object.freeze([
@@ -1795,6 +1804,14 @@ function compactText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeMetaText(value) {
+  return String(value ?? "").replace(/\r\n?/g, "\n");
+}
+
+function trimMetaUrl(value) {
+  return String(value ?? "").trim();
+}
+
 function escapeAttribute(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -1811,8 +1828,16 @@ function decodeHTML(value) {
   return textarea.value;
 }
 
+function decodeMetaContent(value) {
+  return normalizeMetaText(decodeHTML(value));
+}
+
+function escapeMetaContent(value) {
+  return escapeAttribute(normalizeMetaText(value)).replace(/\n/g, "&#10;");
+}
+
 function metaTag(propertyType, key, value) {
-  return `<meta ${propertyType}="${escapeAttribute(key)}" content="${escapeAttribute(value)}">`;
+  return `<meta ${propertyType}="${escapeAttribute(key)}" content="${escapeMetaContent(value)}">`;
 }
 
 function getEmptyEmbedMeta() {
@@ -1827,11 +1852,11 @@ function getEmptyEmbedMeta() {
 }
 
 function buildEmbedHTML(meta = state.embedMeta) {
-  const title = compactText(meta.title);
-  const description = compactText(meta.description);
-  const image = compactText(meta.image);
-  const url = compactText(meta.url);
-  const imageAlt = compactText(meta.imageAlt);
+  const title = normalizeMetaText(meta.title);
+  const description = normalizeMetaText(meta.description);
+  const image = trimMetaUrl(meta.image);
+  const url = trimMetaUrl(meta.url);
+  const imageAlt = normalizeMetaText(meta.imageAlt);
   const twitterCard = compactText(meta.twitterCard) || "summary_large_image";
 
   return [
@@ -1851,21 +1876,38 @@ function buildEmbedHTML(meta = state.embedMeta) {
 }
 
 function getMetaContent(doc, selector) {
-  return doc.querySelector(selector)?.getAttribute("content") || "";
+  return decodeMetaContent(doc.querySelector(selector)?.getAttribute("content") || "");
+}
+
+function getExistingMetaContent(doc, selector) {
+  const element = doc.querySelector(selector);
+  if (!element) return null;
+  return decodeMetaContent(element.getAttribute("content") || "");
+}
+
+function getFirstExistingMetaContent(doc, selectors) {
+  for (const selector of selectors) {
+    const value = getExistingMetaContent(doc, selector);
+    if (value !== null) return value;
+  }
+  return "";
 }
 
 function parseEmbedHTML(html) {
   const source = String(html || "");
   const doc = new DOMParser().parseFromString(`<head>${source}</head>`, "text/html");
-  const title = compactText(doc.querySelector("title")?.textContent);
-  const description = getMetaContent(doc, 'meta[property="og:description"]')
-    || getMetaContent(doc, 'meta[name="twitter:description"]')
-    || "";
-  const image = getMetaContent(doc, 'meta[property="og:image"]')
-    || getMetaContent(doc, 'meta[name="twitter:image"]')
-    || "";
-  const url = getMetaContent(doc, 'meta[property="og:url"]') || "";
-  const imageAlt = getMetaContent(doc, 'meta[property="og:image:alt"]') || "";
+  const title = getExistingMetaContent(doc, 'meta[property="og:title"]')
+    ?? normalizeMetaText(doc.querySelector("title")?.textContent);
+  const description = getFirstExistingMetaContent(doc, [
+    'meta[property="og:description"]',
+    'meta[name="twitter:description"]',
+  ]);
+  const image = getFirstExistingMetaContent(doc, [
+    'meta[property="og:image"]',
+    'meta[name="twitter:image"]',
+  ]);
+  const url = getExistingMetaContent(doc, 'meta[property="og:url"]') ?? "";
+  const imageAlt = getExistingMetaContent(doc, 'meta[property="og:image:alt"]') ?? "";
 
   return {
     title,
@@ -1873,7 +1915,7 @@ function parseEmbedHTML(html) {
     image,
     url,
     imageAlt,
-    twitterCard: getMetaContent(doc, 'meta[name="twitter:card"]') || "summary_large_image",
+    twitterCard: getExistingMetaContent(doc, 'meta[name="twitter:card"]') || "summary_large_image",
   };
 }
 
@@ -1886,7 +1928,7 @@ function fallbackEmbedBlockFromHTML(html) {
   const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
   const defaults = getDefaultEmbedMeta();
   const meta = {
-    title: compactText(doc.querySelector("title")?.textContent) || defaults.title,
+    title: normalizeMetaText(doc.querySelector("title")?.textContent).trim() || defaults.title,
     description: getMetaContent(doc, 'meta[property="og:description"]')
       || getMetaContent(doc, 'meta[name="description"]')
       || defaults.description,
@@ -1898,7 +1940,7 @@ function fallbackEmbedBlockFromHTML(html) {
 }
 
 function shouldUseGeneratedEmbedUrl(value) {
-  return !compactText(value);
+  return !trimMetaUrl(value);
 }
 
 function normalizeLoadedEmbedHTML(html) {
@@ -1926,10 +1968,10 @@ function syncEmbedFields(meta) {
 }
 
 function renderEmbedPreview(meta = state.embedMeta) {
-  const title = compactText(meta.title);
-  const description = compactText(meta.description);
-  const image = compactText(meta.image);
-  const url = compactText(meta.url);
+  const title = normalizeMetaText(meta.title);
+  const description = normalizeMetaText(meta.description);
+  const image = trimMetaUrl(meta.image);
+  const url = trimMetaUrl(meta.url);
   const domain = (() => {
     try {
       return new URL(url).hostname;
@@ -2119,6 +2161,54 @@ async function openAssetsUploadPage() {
   }
 }
 
+function getSocialPreviewPreset() {
+  return socialPreviewPresets.find((preset) => preset.id === state.socialPreviewPresetId) || socialPreviewPresets[0];
+}
+
+function getSocialPreviewAspect() {
+  const preset = getSocialPreviewPreset();
+  return preset.width / preset.height;
+}
+
+function getSocialPreviewSizeText(preset = getSocialPreviewPreset()) {
+  return `${preset.width}×${preset.height}`;
+}
+
+function syncSocialPreviewPresetUI() {
+  const preset = getSocialPreviewPreset();
+  const select = $("#embed-image-ratio");
+  if (select && select.value !== preset.id) select.value = preset.id;
+
+  const note = $("#embed-image-ratio-note");
+  if (note) {
+    note.textContent = `현재 출력 크기: ${getSocialPreviewSizeText(preset)} PNG`;
+  }
+
+  const outputNote = $("#embed-image-output-note");
+  if (outputNote) {
+    outputNote.textContent = `선택 박스 안의 영역만 ${getSocialPreviewSizeText(preset)} PNG로 저장됩니다.`;
+  }
+}
+
+function updateCropPreviewCanvasSize() {
+  const previewCanvas = $("#embed-crop-preview");
+  if (!previewCanvas) return;
+  const preset = getSocialPreviewPreset();
+  if (previewCanvas.width !== preset.width) previewCanvas.width = preset.width;
+  if (previewCanvas.height !== preset.height) previewCanvas.height = preset.height;
+}
+
+function changeSocialPreviewPreset(presetId) {
+  const nextPreset = socialPreviewPresets.find((preset) => preset.id === presetId);
+  if (!nextPreset || nextPreset.id === state.socialPreviewPresetId) return;
+  state.socialPreviewPresetId = nextPreset.id;
+  state.cropSelection = null;
+  state.cropInteraction = null;
+  syncSocialPreviewPresetUI();
+  renderCropCanvases();
+  setEmbedImageStatus(`${nextPreset.label} 비율로 변경했습니다. 선택 박스를 다시 맞춰주세요.`, "info");
+}
+
 function setEmbedImageStatus(message, type = "info") {
   const status = $("#embed-image-status");
   if (!status) return;
@@ -2157,16 +2247,17 @@ function getCropImageRect(canvas = $("#embed-crop-canvas")) {
 
 function getCropSelectionMaxWidth(bounds) {
   if (!bounds) return 0;
-  return Math.max(1, Math.min(bounds.width, bounds.height * socialPreviewAspect));
+  return Math.max(1, Math.min(bounds.width, bounds.height * getSocialPreviewAspect()));
 }
 
 function fitCropSelectionToBounds(selection, bounds = state.cropImageRect) {
   if (!bounds) return null;
+  const aspect = getSocialPreviewAspect();
   const maxWidth = getCropSelectionMaxWidth(bounds);
   const minWidth = Math.min(120, maxWidth);
-  const fallbackWidth = Math.min(maxWidth, bounds.width * 0.82, bounds.height * socialPreviewAspect * 0.82);
+  const fallbackWidth = Math.min(maxWidth, bounds.width * 0.82, bounds.height * aspect * 0.82);
   const width = clampNumber(Number(selection?.width) || fallbackWidth || maxWidth, minWidth, maxWidth);
-  const height = width / socialPreviewAspect;
+  const height = width / aspect;
   const fallbackX = bounds.x + (bounds.width - width) / 2;
   const fallbackY = bounds.y + (bounds.height - height) / 2;
   const x = clampNumber(
@@ -2184,8 +2275,9 @@ function fitCropSelectionToBounds(selection, bounds = state.cropImageRect) {
 
 function createInitialCropSelection(bounds) {
   if (!bounds) return null;
+  const aspect = getSocialPreviewAspect();
   const maxWidth = getCropSelectionMaxWidth(bounds);
-  const width = Math.min(maxWidth, bounds.width * 0.82, bounds.height * socialPreviewAspect * 0.82);
+  const width = Math.min(maxWidth, bounds.width * 0.82, bounds.height * aspect * 0.82);
   return fitCropSelectionToBounds({ width }, bounds);
 }
 
@@ -2267,6 +2359,8 @@ function drawCropPreviewCanvas(canvas) {
 function renderCropCanvases() {
   const editorCanvas = $("#embed-crop-canvas");
   const previewCanvas = $("#embed-crop-preview");
+  updateCropPreviewCanvasSize();
+  syncSocialPreviewPresetUI();
   drawCropEditorCanvas(editorCanvas);
   drawCropPreviewCanvas(previewCanvas);
 
@@ -2295,6 +2389,7 @@ function resizeCropSelectionFromHandle(handle, point) {
   const start = state.cropInteractionStartSelection;
   const bounds = state.cropImageRect;
   if (!start || !bounds) return null;
+  const aspect = getSocialPreviewAspect();
 
   const dx = point.x - state.cropInteractionStartX;
   const dy = point.y - state.cropInteractionStartY;
@@ -2311,7 +2406,7 @@ function resizeCropSelectionFromHandle(handle, point) {
   }
   if (touchesVertical) {
     const nextHeight = start.height + (touchesBottom ? dy : -dy);
-    const widthFromHeight = nextHeight * socialPreviewAspect;
+    const widthFromHeight = nextHeight * aspect;
     if (!touchesHorizontal || Math.abs(widthFromHeight - start.width) > Math.abs(nextWidth - start.width)) {
       nextWidth = widthFromHeight;
     }
@@ -2320,7 +2415,7 @@ function resizeCropSelectionFromHandle(handle, point) {
   const maxWidth = getCropSelectionMaxWidth(bounds);
   const minWidth = Math.min(120, maxWidth);
   const width = clampNumber(nextWidth, minWidth, maxWidth);
-  const height = width / socialPreviewAspect;
+  const height = width / aspect;
   let x = start.x;
   let y = start.y;
 
@@ -2431,8 +2526,9 @@ function downloadSocialPreviewPNG() {
     }
 
     const outputCanvas = document.createElement("canvas");
-    outputCanvas.width = socialPreviewWidth;
-    outputCanvas.height = socialPreviewHeight;
+    const preset = getSocialPreviewPreset();
+    outputCanvas.width = preset.width;
+    outputCanvas.height = preset.height;
     const context = outputCanvas.getContext("2d");
     context.drawImage(
       state.cropImage,
@@ -2459,7 +2555,7 @@ function downloadSocialPreviewPNG() {
       anchor.click();
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-      setEmbedImageStatus("social-preview.png 파일을 다운로드했습니다.", "success");
+      setEmbedImageStatus(`${getSocialPreviewSizeText(preset)} social-preview.png 파일을 다운로드했습니다.`, "success");
     }, "image/png");
   } catch (error) {
     setEmbedImageStatus("브라우저 보안 정책 때문에 PNG 다운로드가 막혔습니다. 파일 업로드로 다시 시도하세요.", "error");
@@ -4687,6 +4783,11 @@ function bindEvents() {
 
   $("#center-embed-crop")?.addEventListener("click", centerCropSelection);
   $("#reset-embed-crop")?.addEventListener("click", resetCropSelection);
+  $("#embed-image-ratio")?.addEventListener("change", (event) => {
+    changeSocialPreviewPreset(event.target.value);
+  });
+  syncSocialPreviewPresetUI();
+  updateCropPreviewCanvasSize();
 
   const cropSelection = $("#embed-crop-selection");
   cropSelection?.addEventListener("pointerdown", startCropSelectionInteraction);
