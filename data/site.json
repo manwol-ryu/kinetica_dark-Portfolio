@@ -139,15 +139,15 @@
         "category": "롱폼",
         "title": "",
         "meta": "",
-        "columns": 4,
-        "singleColumnSize": "medium"
+        "columns": null,
+        "singleColumnSize": ""
       },
       {
         "category": "숏츠",
         "title": "",
         "meta": "",
         "columns": null,
-        "singleColumnSize": "large"
+        "singleColumnSize": ""
       }
     ],
     "videos": [
@@ -298,7 +298,7 @@
     "primaryCard": {
       "label": "discord",
       "value": "jinyeoung_",
-      "note": "메세지로 의뢰 보내주세요",
+      "note": "메세지로 의뢰 보내주실때 양식에 따라 보내주세요!",
       "icon": "person",
       "href": ""
     },
