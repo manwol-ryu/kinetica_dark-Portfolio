@@ -131,19 +131,19 @@
     "categoryStackTypeFilterEnabled": true,
     "categoryStackSingleColumnSize": "medium",
     "categoryOrder": [
-      "포트폴리오 롱폼",
-      "포트폴리오 숏폼"
+      "롱폼",
+      "숏츠"
     ],
     "categoryEntries": [
       {
-        "category": "포트폴리오 롱폼",
+        "category": "롱폼",
         "title": "",
         "meta": "",
         "columns": null,
         "singleColumnSize": ""
       },
       {
-        "category": "포트폴리오 숏폼",
+        "category": "숏츠",
         "title": "",
         "meta": "",
         "columns": null,
@@ -156,35 +156,35 @@
         "title": "100만 구독자를 보유한 한국 버추얼 채널들",
         "date": "",
         "type": "short",
-        "category": "포트폴리오 숏폼"
+        "category": "숏츠"
       },
       {
         "id": "erDXklmVmro",
         "title": "쇼미12 역사상 최초의 버추얼 래퍼",
         "date": "",
         "type": "short",
-        "category": "포트폴리오 숏폼"
+        "category": "숏츠"
       },
       {
         "id": "NofP_kG_utU",
         "title": "??이 되어버린 종교 버튜버",
         "date": "",
         "type": "short",
-        "category": "포트폴리오 숏폼"
+        "category": "숏츠"
       },
       {
         "id": "iMqeophov9Q",
         "title": "음식 먹방 포트폴리오",
         "date": "",
         "type": "long",
-        "category": "포트폴리오 롱폼"
+        "category": "롱폼"
       },
       {
         "id": "BFpS3H_LSGA",
         "title": "저챗 포트폴리오",
         "date": "",
         "type": "long",
-        "category": "포트폴리오 롱폼"
+        "category": "롱폼"
       }
     ]
   },
