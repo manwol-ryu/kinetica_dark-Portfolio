@@ -20,7 +20,7 @@
     };
   </script>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link rel="stylesheet" href="admin.css?v=20260422-1">
+  <link rel="stylesheet" href="admin.css?v=20260422-7">
 </head>
 <body>
   <div class="admin-layout">
@@ -139,6 +139,13 @@
             <div class="section-row-head">
               <h3>내비 링크</h3>
               <button id="add-nav-link" type="button">링크 추가</button>
+            </div>
+            <div class="quick-link-preset-panel">
+              <div class="quick-link-preset-head">
+                <strong>빠른 추가</strong>
+                <p class="field-note">자주 쓰는 기본 내비 링크를 버튼으로 바로 추가할 수 있습니다.</p>
+              </div>
+              <div id="nav-link-presets" class="quick-link-preset-list"></div>
             </div>
             <div class="managed-list" id="nav-link-list"></div>
           </section>
@@ -370,6 +377,15 @@
               </div>
             </div>
             <div class="form-grid">
+              <label class="field" for="works-visual-preset">
+                <span>비주얼 프리셋</span>
+                <select id="works-visual-preset">
+                  <option value="reference">reference</option>
+                  <option value="panel">panel</option>
+                  <option value="minimal">minimal</option>
+                </select>
+                <span class="field-note">필터와 영상 데이터는 유지하고 화면 톤만 바꿉니다.</span>
+              </label>
               <label class="field" for="works-display-mode">
                 <span>표시 방식</span>
                 <select id="works-display-mode">
@@ -530,8 +546,17 @@
           </section>
 
           <section class="editor-card detail-section">
-            <h3>프로세스 제목</h3>
+            <h3>프로세스 설정</h3>
             <div class="form-grid">
+              <label class="field" for="pricing-process-style">
+                <span>프로세스 프리셋</span>
+                <select id="pricing-process-style">
+                  <option value="cards">cards</option>
+                  <option value="minimal">minimal</option>
+                  <option value="editorial">editorial</option>
+                </select>
+                <span class="field-note">기본값은 `cards`이며, 현재 JSON에 값이 없어도 자동 적용됩니다.</span>
+              </label>
               <label class="field span-2" for="pricing-process-title"><span>제목</span><input id="pricing-process-title" type="text"></label>
             </div>
           </section>
@@ -567,6 +592,16 @@
             <h3>가격 섹션 헤더</h3>
             <div class="form-grid">
               <label class="field" for="pricing-eyebrow"><span>Eyebrow</span><input id="pricing-eyebrow" type="text"></label>
+              <label class="field" for="pricing-grid-columns">
+                <span>가격 카드 열 수</span>
+                <select id="pricing-grid-columns">
+                  <option value="1">1열</option>
+                  <option value="2">2열</option>
+                  <option value="3">3열</option>
+                  <option value="4">4열</option>
+                </select>
+                <span class="field-note">데스크톱 기준 열 수입니다. 태블릿은 최대 2열, 모바일은 1열로 자동 조정됩니다.</span>
+              </label>
               <label class="field span-2" for="pricing-title"><span>제목</span><input id="pricing-title" type="text"></label>
               <label class="field span-2" for="pricing-description"><span>설명</span><textarea id="pricing-description" rows="4"></textarea></label>
             </div>
@@ -614,7 +649,11 @@
             <h3>문의 섹션</h3>
             <div class="form-grid">
               <label class="field" for="contact-eyebrow"><span>Eyebrow</span><input id="contact-eyebrow" type="text"></label>
-              <label class="field span-2" for="contact-title"><span>제목</span><input id="contact-title" type="text"></label>
+              <label class="field span-2" for="contact-title">
+                <span>제목</span>
+                <textarea id="contact-title" rows="3"></textarea>
+                <span class="field-note">Enter로 줄을 나누면 공개 페이지 제목에도 그대로 반영됩니다.</span>
+              </label>
               <label class="field" for="contact-title-accent"><span>강조 단어</span><input id="contact-title-accent" type="text"></label>
               <label class="field span-2" for="contact-description"><span>설명</span><textarea id="contact-description" rows="4"></textarea></label>
             </div>
@@ -647,7 +686,11 @@
             <h3>푸터</h3>
             <div class="form-grid">
               <label class="field" for="footer-title"><span>푸터 제목</span><input id="footer-title" type="text"></label>
-              <label class="field" for="footer-copy"><span>저작권 문구</span><input id="footer-copy" type="text"></label>
+              <label class="field span-2" for="footer-copy">
+                <span>저작권 문구</span>
+                <textarea id="footer-copy" rows="3"></textarea>
+                <span class="field-note">Enter로 줄을 나누면 푸터에 그대로 반영됩니다.</span>
+              </label>
             </div>
           </section>
 
@@ -702,6 +745,6 @@
     </section>
   </div>
 
-  <script src="admin.js?v=20260422-6"></script>
+  <script src="admin.js?v=20260423-1"></script>
 </body>
 </html>
