@@ -1,6 +1,6 @@
 const jsonPath = "../data/site.json";
 const githubJsonPath = "data/site.json";
-const githubDefaultBranch = "main";
+const fallbackGitHubBranch = "main";
 const previewTargets = {
   brand: {
     title: "브랜드 / 내비 미리보기",
@@ -229,6 +229,11 @@ const state = {
   metadataRequestId: 0,
   lastMetadataVideoId: "",
   worksFormVideoId: "",
+  githubDefaultBranch: fallbackGitHubBranch,
+  githubDefaultBranchRepo: "",
+  githubDefaultBranchSource: "fallback",
+  githubBranchRequestId: 0,
+  githubBranchTimer: null,
 };
 
 const NAV_LINK_QUICK_PRESETS = Object.freeze([
@@ -512,6 +517,10 @@ function normalizeGitHubRepo(value) {
   return `${parts[0]}/${parts[1]}`;
 }
 
+function normalizeGitHubBranch(value) {
+  return String(value || "").trim().replace(/^\/+|\/+$/g, "");
+}
+
 function resolveGitHubRepoFromPagesLocation(locationRef = window.location) {
   const hostname = String(locationRef.hostname || "").toLowerCase();
   const suffix = ".github.io";
@@ -539,10 +548,34 @@ function resolveGitHubRepoFromPagesLocation(locationRef = window.location) {
   return `${owner}/${repoName}`;
 }
 
-function buildGitHubSiteJsonUrl(repo) {
+function buildGitHubRepoApiUrl(repo) {
   const normalizedRepo = normalizeGitHubRepo(repo);
+  return normalizedRepo ? `https://api.github.com/repos/${normalizedRepo}` : "";
+}
+
+function getKnownGitHubDefaultBranch(repo) {
+  const normalizedRepo = normalizeGitHubRepo(repo);
+  if (!normalizedRepo || state.githubDefaultBranchRepo !== normalizedRepo) return "";
+  if (state.githubDefaultBranchSource !== "fetched") return "";
+  return normalizeGitHubBranch(state.githubDefaultBranch);
+}
+
+function getGitHubDefaultBranch(repo) {
+  return getKnownGitHubDefaultBranch(repo) || fallbackGitHubBranch;
+}
+
+function setGitHubDefaultBranch(repo, branch, source = "fetched") {
+  state.githubDefaultBranchRepo = normalizeGitHubRepo(repo);
+  state.githubDefaultBranch = normalizeGitHubBranch(branch) || fallbackGitHubBranch;
+  state.githubDefaultBranchSource = source;
+  return state.githubDefaultBranch;
+}
+
+function buildGitHubSiteJsonUrl(repo, branch = getGitHubDefaultBranch(repo)) {
+  const normalizedRepo = normalizeGitHubRepo(repo);
+  const normalizedBranch = normalizeGitHubBranch(branch) || fallbackGitHubBranch;
   return normalizedRepo
-    ? `https://github.com/${normalizedRepo}/blob/${githubDefaultBranch}/${githubJsonPath}`
+    ? `https://github.com/${normalizedRepo}/blob/${normalizedBranch}/${githubJsonPath}`
     : "";
 }
 
@@ -553,6 +586,25 @@ function buildGitHubRepoUrl(repo) {
 
 function getEffectiveGitHubRepo(repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
   return normalizeGitHubRepo(repoValue) || resolveGitHubRepoFromPagesLocation(locationRef);
+}
+
+function getGitHubDefaultBranchNote(repo) {
+  const normalizedRepo = normalizeGitHubRepo(repo);
+  if (!normalizedRepo) return "";
+
+  if (state.githubDefaultBranchRepo === normalizedRepo) {
+    if (state.githubDefaultBranchSource === "loading") {
+      return ` GitHub 기본 브랜치를 확인 중이며, 확인 전까지는 ${fallbackGitHubBranch} 기준 링크를 사용합니다.`;
+    }
+    if (state.githubDefaultBranchSource === "fetched") {
+      return ` GitHub 기본 브랜치: ${state.githubDefaultBranch}.`;
+    }
+    if (state.githubDefaultBranchSource === "fallback") {
+      return ` GitHub 기본 브랜치를 확인하지 못해 ${fallbackGitHubBranch} 기준 링크를 사용합니다.`;
+    }
+  }
+
+  return ` GitHub 기본 브랜치는 확인 전까지 ${fallbackGitHubBranch}로 가정합니다.`;
 }
 
 function getAutoFooterRepoLink(links = state.data?.site?.footer?.links, repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
@@ -577,7 +629,91 @@ function getEffectiveFooterLinks(links = state.data?.site?.footer?.links, repoVa
 
 function resolveGitHubSiteJsonUrl(locationRef = window.location, repoValue = state.data?.site?.githubRepo) {
   const effectiveRepo = getEffectiveGitHubRepo(repoValue, locationRef);
-  return effectiveRepo ? buildGitHubSiteJsonUrl(effectiveRepo) : "";
+  return effectiveRepo ? buildGitHubSiteJsonUrl(effectiveRepo, getGitHubDefaultBranch(effectiveRepo)) : "";
+}
+
+async function ensureGitHubDefaultBranch(repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
+  const effectiveRepo = getEffectiveGitHubRepo(repoValue, locationRef);
+  if (!effectiveRepo) {
+    state.githubBranchRequestId += 1;
+    state.githubDefaultBranchRepo = "";
+    state.githubDefaultBranch = fallbackGitHubBranch;
+    state.githubDefaultBranchSource = "fallback";
+    renderGitHubRepoField({ preserveInputValue: true });
+    return fallbackGitHubBranch;
+  }
+
+  const cachedBranch = getKnownGitHubDefaultBranch(effectiveRepo);
+  if (cachedBranch) return cachedBranch;
+
+  const requestId = ++state.githubBranchRequestId;
+  setGitHubDefaultBranch(effectiveRepo, fallbackGitHubBranch, "loading");
+  renderGitHubRepoField({ preserveInputValue: true });
+
+  try {
+    const response = await fetch(buildGitHubRepoApiUrl(effectiveRepo), {
+      cache: "no-store",
+      headers: {
+        Accept: "application/vnd.github+json",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`GitHub API ${response.status}`);
+    }
+
+    const payload = await response.json();
+    if (requestId !== state.githubBranchRequestId) {
+      return getGitHubDefaultBranch(effectiveRepo);
+    }
+
+    const defaultBranch = setGitHubDefaultBranch(effectiveRepo, payload.default_branch, "fetched");
+
+    renderGitHubRepoField({ preserveInputValue: true });
+
+    return defaultBranch;
+  } catch (error) {
+    if (requestId !== state.githubBranchRequestId) {
+      return getGitHubDefaultBranch(effectiveRepo);
+    }
+
+    setGitHubDefaultBranch(effectiveRepo, fallbackGitHubBranch, "fallback");
+    renderGitHubRepoField({ preserveInputValue: true });
+    return fallbackGitHubBranch;
+  }
+}
+
+function scheduleGitHubDefaultBranchLookup(repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
+  if (state.githubBranchTimer) {
+    window.clearTimeout(state.githubBranchTimer);
+    state.githubBranchTimer = null;
+  }
+
+  const effectiveRepo = getEffectiveGitHubRepo(repoValue, locationRef);
+  if (!effectiveRepo) {
+    state.githubBranchRequestId += 1;
+    state.githubDefaultBranchRepo = "";
+    state.githubDefaultBranch = fallbackGitHubBranch;
+    state.githubDefaultBranchSource = "fallback";
+    renderGitHubRepoField({ preserveInputValue: true });
+    return;
+  }
+
+  if (state.githubDefaultBranchRepo !== effectiveRepo) {
+    state.githubBranchRequestId += 1;
+    state.githubDefaultBranchRepo = effectiveRepo;
+    state.githubDefaultBranch = fallbackGitHubBranch;
+    state.githubDefaultBranchSource = "fallback";
+  }
+
+  if (getKnownGitHubDefaultBranch(effectiveRepo)) {
+    renderGitHubRepoField({ preserveInputValue: true });
+    return;
+  }
+
+  state.githubBranchTimer = window.setTimeout(() => {
+    state.githubBranchTimer = null;
+    void ensureGitHubDefaultBranch(repoValue, locationRef);
+  }, 350);
 }
 
 function normalizeNavLinks(items) {
@@ -1405,23 +1541,23 @@ function renderGitHubRepoField({ preserveInputValue = false } = {}) {
   if (!note) return;
 
   if (rawRepo && normalizedRepo) {
-    note.textContent = "직접 입력한 GitHub Repo를 사용합니다.";
+    note.textContent = `직접 입력한 GitHub Repo를 사용합니다.${getGitHubDefaultBranchNote(effectiveRepo)}`;
     return;
   }
 
   if (rawRepo && !normalizedRepo) {
     note.textContent = inferredRepo
-      ? `owner/repo 형식이 아니어서 현재 GitHub Pages 주소의 ${inferredRepo}를 대신 사용합니다.`
+      ? `owner/repo 형식이 아니어서 현재 GitHub Pages 주소의 ${inferredRepo}를 대신 사용합니다.${getGitHubDefaultBranchNote(inferredRepo)}`
       : "owner/repo 형식으로 입력해주세요.";
     return;
   }
 
   if (inferredRepo) {
-    note.textContent = `현재 GitHub Pages 주소에서 ${inferredRepo}를 자동으로 감지해 사용합니다.`;
+    note.textContent = `현재 GitHub Pages 주소에서 ${inferredRepo}를 자동으로 감지해 사용합니다.${getGitHubDefaultBranchNote(inferredRepo)}`;
     return;
   }
 
-  note.textContent = "GitHub Pages에서 열면 현재 repo를 자동으로 감지합니다.";
+  note.textContent = "GitHub Pages에서 열면 현재 repo를 자동으로 감지하고 기본 브랜치도 함께 확인합니다.";
 }
 
 function textOrFallback(value, fallback) {
@@ -3574,22 +3710,38 @@ async function loadJson(confirmReload = false) {
     const parsed = text.trim() ? JSON.parse(text) : {};
     state.data = normalizeData(parsed);
     renderAll();
+    void ensureGitHubDefaultBranch(state.data.site?.githubRepo);
     setStatus("site.json을 불러왔습니다.", "success");
   } catch (error) {
     state.data = normalizeData({});
     renderAll();
+    void ensureGitHubDefaultBranch(state.data.site?.githubRepo);
     setStatus(`불러오기 실패: ${error.message}. 기본 구조로 시작합니다.`, "error");
   }
 }
 
 async function openGitHubJson() {
-  const githubUrl = resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo);
-  if (!githubUrl) {
+  const effectiveRepo = getEffectiveGitHubRepo(state.data.site.githubRepo, window.location);
+  if (!effectiveRepo) {
     setStatus("GitHub Repo를 입력하거나 GitHub Pages 배포 주소에서 열어주세요.", "error");
     return;
   }
 
-  const opened = window.open(githubUrl, "_blank", "noopener");
+  const githubTab = window.open("", "_blank");
+  await ensureGitHubDefaultBranch(state.data.site.githubRepo, window.location);
+  const githubUrl = resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo);
+  if (!githubUrl) {
+    githubTab?.close();
+    setStatus("GitHub Repo를 입력하거나 GitHub Pages 배포 주소에서 열어주세요.", "error");
+    return;
+  }
+
+  if (githubTab) {
+    githubTab.opener = null;
+    githubTab.location.href = githubUrl;
+  }
+
+  const opened = githubTab || window.open(githubUrl, "_blank", "noopener");
   setStatus(
     opened
       ? "GitHub의 data/site.json 페이지를 새 탭으로 열었습니다."
@@ -3600,11 +3752,19 @@ async function openGitHubJson() {
 
 async function copyAllJson() {
   const json = buildJson();
-  const githubUrl = resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo);
-  const githubTab = githubUrl ? window.open("", "_blank") : null;
+  const effectiveRepo = getEffectiveGitHubRepo(state.data.site.githubRepo, window.location);
+  const githubTab = effectiveRepo ? window.open("", "_blank") : null;
 
   try {
     await navigator.clipboard.writeText(json);
+    if (effectiveRepo) {
+      await ensureGitHubDefaultBranch(state.data.site.githubRepo, window.location);
+    }
+
+    const githubUrl = effectiveRepo
+      ? resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo)
+      : "";
+
     if (githubUrl) {
       if (githubTab) {
         githubTab.opener = null;
@@ -3623,6 +3783,10 @@ async function copyAllJson() {
       setStatus("JSON을 복사했습니다. GitHub 이동은 GitHub Repo가 있거나 GitHub Pages 주소에서만 동작합니다.", "success");
     }
   } catch (error) {
+    const githubUrl = effectiveRepo
+      ? resolveGitHubSiteJsonUrl(window.location, state.data.site.githubRepo)
+      : "";
+
     if (githubUrl && githubTab && !githubTab.closed) {
       githubTab.opener = null;
       githubTab.location.href = githubUrl;
@@ -3713,6 +3877,7 @@ function bindEvents() {
   $("#site-github-repo")?.addEventListener("input", (event) => {
     state.data.site.githubRepo = event.target.value;
     renderGitHubRepoField({ preserveInputValue: true });
+    scheduleGitHubDefaultBranchLookup(event.target.value, window.location);
     renderSummary();
     renderFooterLinkList();
     refreshJsonOutput();
