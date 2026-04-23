@@ -17,8 +17,8 @@
   --gold: #f6d96f;
   --radius: 8px;
   --shadow: 0 12px 30px rgba(42, 58, 74, .07);
-  --font-body: "Inter", "Noto Sans KR", sans-serif;
-  --font-accent: "Caveat", cursive;
+  --font-body: "Inter", "Noto Sans KR", "Segoe UI", "Malgun Gothic", "맑은 고딕", Arial, sans-serif;
+  --font-accent: "Caveat", "Segoe Print", "Comic Sans MS", cursive;
 }
 
 * {
@@ -48,6 +48,11 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined", "Segoe UI Symbol", sans-serif;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
 button {
@@ -602,6 +607,7 @@ h3 {
 }
 
 .live-preview-surface .material-symbols-outlined {
+  font-family: "Material Symbols Outlined", "Segoe UI Symbol", sans-serif;
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   vertical-align: middle;
 }
