@@ -41,6 +41,10 @@
         <button class="tab-button" type="button" data-tab="pricing">가격 / 커스텀</button>
         <button class="tab-button" type="button" data-tab="contact-footer">문의 / 푸터</button>
         <button class="tab-button" type="button" data-tab="json">JSON 확인</button>
+        <span class="tab-divider" aria-hidden="true"></span>
+        <span class="tab-category-label">임베드 카드 설정</span>
+        <button class="tab-button sub-tab" type="button" data-tab="embed-card">임베드카드 수정</button>
+        <button class="tab-button sub-tab" type="button" data-tab="embed-image">이미지 수정</button>
       </nav>
     </aside>
 
@@ -727,6 +731,150 @@
             <button class="primary-action" id="copy-json-panel" type="button">복사하기</button>
           </div>
           <textarea id="json-output" class="json-output" spellcheck="false" aria-label="완성된 JSON"></textarea>
+        </section>
+
+        <section class="tab-panel" id="panel-embed-card" data-panel="embed-card">
+          <div class="panel-head">
+            <div>
+              <h2>임베드카드 수정</h2>
+              <p><code>index.html</code>의 <code>OG START</code>부터 <code>OG END</code>까지의 HTML 코드만 읽고 수정합니다.</p>
+            </div>
+            <button class="primary-action" id="reload-embed-html" type="button">초기 HTML 다시 불러오기</button>
+          </div>
+
+          <section class="editor-card detail-section guide-card">
+            <h3>임베드 카드 설정 방법</h3>
+            <ol class="guide-steps">
+              <li><strong>HTML 코드 복사</strong>를 눌러 <code>OG START/END</code> 블록 전체를 복사합니다.</li>
+              <li><strong>index.html 열기</strong>를 눌러 GitHub의 <code>index.html</code> 편집 화면을 엽니다.</li>
+              <li>파일 상단에서 <code>&lt;!-- OG START --&gt;</code>부터 <code>&lt;!-- OG END --&gt;</code>까지 기존 코드를 지웁니다.</li>
+              <li>복사한 코드를 같은 위치에 붙여넣고 저장합니다.</li>
+              <li>이미지를 바꿨다면 <code>이미지 수정</code> 페이지에서 만든 <code>social-preview.png</code>를 <code>assets/</code>에 업로드하세요.</li>
+              <li>Discord 등은 캐시가 남을 수 있으니 테스트할 때 URL 뒤에 <code>?v=2</code>를 붙여 확인하세요.</li>
+            </ol>
+          </section>
+
+          <section class="editor-card detail-section">
+            <h3>카드 미리보기</h3>
+            <p class="field-note" id="embed-card-status">index.html의 임베드 카드 코드를 불러오는 중입니다...</p>
+            <article class="embed-card-preview" aria-label="임베드 카드 미리보기">
+              <div class="embed-preview-image-wrap">
+                <img id="embed-preview-image" alt="" hidden>
+                <div id="embed-preview-image-empty" class="embed-preview-placeholder">이미지 URL을 입력하면 이곳에 표시됩니다.</div>
+              </div>
+              <div class="embed-preview-body">
+                <div id="embed-preview-domain" class="embed-preview-domain">example.com</div>
+                <h3 id="embed-preview-title">카드 제목</h3>
+                <p id="embed-preview-description">카드 설명이 이곳에 표시됩니다.</p>
+              </div>
+            </article>
+          </section>
+
+          <section class="editor-card detail-section">
+            <h3>메타데이터 수정</h3>
+            <div class="form-grid">
+              <label class="field" for="embed-meta-title"><span>카드 제목</span><input id="embed-meta-title" type="text" placeholder="영상 포트폴리오 템플릿"></label>
+              <label class="field" for="embed-meta-url"><span>페이지 URL</span><input id="embed-meta-url" type="text" placeholder="https://example.github.io/video-portfolio/"></label>
+              <label class="field span-2" for="embed-meta-description"><span>카드 설명</span><textarea id="embed-meta-description" rows="3" placeholder="영상 편집자와 크리에이터를 위한 정적 포트폴리오 템플릿입니다. site.json만 수정해 브랜드, 작업물, 가격, 문의 정보를 구성할 수 있습니다."></textarea></label>
+              <label class="field span-2" for="embed-meta-image"><span>대표 이미지 URL</span><input id="embed-meta-image" type="text" placeholder="https://example.github.io/video-portfolio/assets/social-preview.png"></label>
+              <label class="field span-2" for="embed-meta-image-alt"><span>이미지 대체 문구</span><input id="embed-meta-image-alt" type="text" placeholder="영상 포트폴리오 템플릿 공유 이미지"></label>
+            </div>
+          </section>
+
+          <section class="editor-card detail-section">
+            <div class="section-row-head">
+              <h3>코드 복사하기</h3>
+              <div class="url-actions">
+                <button class="primary-action" id="copy-embed-html" type="button">HTML 코드 복사</button>
+                <button class="primary-action" id="open-index-html" type="button">index.html 열기</button>
+              </div>
+            </div>
+            <label class="field" for="embed-html-output">
+              <span>index.html에 붙여넣을 OG 코드</span>
+              <textarea id="embed-html-output" class="embed-code-output" rows="14" spellcheck="false"></textarea>
+            </label>
+            <p class="field-note">위 코드 전체를 복사해서 <code>index.html</code> 상단의 기존 <code>OG START</code>부터 <code>OG END</code>까지의 범위와 교체하세요.</p>
+          </section>
+        </section>
+
+        <section class="tab-panel" id="panel-embed-image" data-panel="embed-image">
+          <div class="panel-head">
+            <div>
+              <h2>이미지 수정</h2>
+              <p>대표 이미지를 1200×630 비율로 자르고 <code>social-preview.png</code> 이름으로 다운로드합니다.</p>
+            </div>
+          </div>
+
+          <section class="editor-card detail-section guide-card">
+            <h3>이미지 설정 방법</h3>
+            <ol class="guide-steps">
+              <li>사용할 이미지를 파일로 업로드하거나 이미지 URL로 불러옵니다.</li>
+              <li>이미지 위의 점선 선택 박스 안에 카드에서 보여주고 싶은 영역이 들어오도록 위치를 맞춥니다.</li>
+              <li>선택 박스를 드래그해서 이동하고, 모서리나 변 중앙 핸들을 드래그해서 크기를 조절합니다.</li>
+              <li>임베드 카드 미리보기에서 1200×630 카드 이미지가 의도한 구도인지 확인합니다.</li>
+              <li><strong>PNG 다운로드</strong>를 누르면 <code>social-preview.png</code> 파일로 저장됩니다.</li>
+              <li><strong>assets 업로드 페이지 열기</strong>를 눌러 GitHub 레포의 <code>assets/</code> 폴더에 업로드합니다.</li>
+              <li>업로드 후 <code>임베드카드 수정</code> 페이지에서 대표 이미지 URL을 <code>https://example.github.io/video-portfolio/assets/social-preview.png</code>처럼 배포된 절대 URL로 설정합니다.</li>
+            </ol>
+          </section>
+
+          <section class="editor-card detail-section">
+            <h3>이미지 불러오기</h3>
+            <div class="form-grid">
+              <label class="field" for="embed-image-file"><span>파일 업로드</span><input id="embed-image-file" type="file" accept="image/*"></label>
+              <label class="field" for="embed-image-url"><span>이미지 URL</span><input id="embed-image-url" type="url" placeholder="https://example.com/image.png"></label>
+              <div class="span-2 url-actions">
+                <button class="primary-action" id="load-embed-image-url" type="button">URL 이미지 불러오기</button>
+                <span class="field-note">URL 이미지는 브라우저 보안 정책 때문에 PNG 다운로드가 막힐 수 있습니다. 실패하면 파일 업로드로 다시 시도하세요.</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="editor-card detail-section">
+            <div class="section-row-head">
+              <h3>자르기 영역 선택</h3>
+              <div class="url-actions">
+                <button class="primary-action" id="center-embed-crop" type="button">가운데 정렬</button>
+                <button class="primary-action" id="reset-embed-crop" type="button">처음 상태로</button>
+              </div>
+            </div>
+            <div class="crop-workspace">
+              <div class="crop-canvas-shell">
+                <canvas id="embed-crop-canvas" width="1200" height="630" aria-label="이미지 자르기 캔버스"></canvas>
+                <div id="embed-crop-selection" class="crop-selection-box" aria-label="다운로드할 이미지 선택 영역" hidden>
+                  <span class="crop-selection-guide horizontal" aria-hidden="true"></span>
+                  <span class="crop-selection-guide vertical" aria-hidden="true"></span>
+                  <span class="crop-selection-handle handle-nw" data-handle="nw" aria-hidden="true"></span>
+                  <span class="crop-selection-handle handle-n" data-handle="n" aria-hidden="true"></span>
+                  <span class="crop-selection-handle handle-ne" data-handle="ne" aria-hidden="true"></span>
+                  <span class="crop-selection-handle handle-e" data-handle="e" aria-hidden="true"></span>
+                  <span class="crop-selection-handle handle-se" data-handle="se" aria-hidden="true"></span>
+                  <span class="crop-selection-handle handle-s" data-handle="s" aria-hidden="true"></span>
+                  <span class="crop-selection-handle handle-sw" data-handle="sw" aria-hidden="true"></span>
+                  <span class="crop-selection-handle handle-w" data-handle="w" aria-hidden="true"></span>
+                </div>
+                <div id="embed-crop-placeholder" class="crop-placeholder">이미지를 불러오면 점선 선택 박스를 움직이고 크기를 조절할 수 있습니다.</div>
+              </div>
+              <aside class="crop-side-panel">
+                <div>
+                  <h4>다운로드 / 업로드</h4>
+                  <p class="field-note">선택 박스 안의 영역만 1200×630 PNG로 저장됩니다.</p>
+                </div>
+                <div class="crop-action-stack">
+                  <button class="primary-action" id="download-social-preview" type="button">PNG 다운로드</button>
+                  <button class="primary-action wide-action" id="open-assets-upload" type="button">assets 업로드 페이지 열기</button>
+                </div>
+                <p class="field-note">다운로드 파일명은 항상 <code>social-preview.png</code>입니다. 이 이름으로 <code>assets/</code>에 업로드하면 HTML 코드의 이미지 URL을 바꿀 필요가 없습니다.</p>
+                <p class="field-note" id="embed-image-status" aria-live="polite"></p>
+              </aside>
+            </div>
+          </section>
+
+          <section class="editor-card detail-section">
+            <h3>임베드 카드 미리보기</h3>
+            <canvas id="embed-crop-preview" class="crop-preview-canvas" width="1200" height="630" aria-label="임베드 카드 미리보기"></canvas>
+            <p class="field-note">큰 이미지는 플랫폼마다 자동으로 잘리거나 축소될 수 있습니다. 원하는 구도를 유지하려면 반드시 1200×630으로 잘라서 업로드하세요.</p>
+          </section>
         </section>
       </main>
     </div>

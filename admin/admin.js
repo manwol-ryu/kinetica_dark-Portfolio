@@ -1,6 +1,11 @@
 const jsonPath = "../data/site.json";
 const githubJsonPath = "data/site.json";
+const indexHtmlPath = "../index.html";
 const fallbackGitHubBranch = "main";
+const embedCardTabs = new Set(["embed-card", "embed-image"]);
+const socialPreviewWidth = 1200;
+const socialPreviewHeight = 630;
+const socialPreviewAspect = socialPreviewWidth / socialPreviewHeight;
 const previewTargets = {
   brand: {
     title: "브랜드 / 내비 미리보기",
@@ -58,11 +63,20 @@ const previewTargets = {
   },
 };
 
+const DEFAULT_EMBED_META = {
+  title: "영상 포트폴리오 템플릿",
+  description: "영상 편집자와 크리에이터를 위한 정적 포트폴리오 템플릿입니다. site.json만 수정해 브랜드, 작업물, 가격, 문의 정보를 구성할 수 있습니다.",
+  image: "https://example.github.io/video-portfolio/assets/social-preview.png",
+  url: "https://example.github.io/video-portfolio/",
+  imageAlt: "영상 포트폴리오 템플릿 공유 이미지",
+  twitterCard: "summary_large_image",
+};
+
 const DEFAULT_DATA = {
   site: {
     title: "영상 포트폴리오 템플릿",
     description: "영상 편집자와 크리에이터를 위한 정적 포트폴리오 템플릿입니다. site.json만 수정해 브랜드, 작업물, 가격, 문의 정보를 구성할 수 있습니다.",
-    githubRepo: "manwol-ryu/kinetica_dark-Portfolio",
+    githubRepo: "",
     brand: {
       prefix: "studio",
       name: "your-name",
@@ -234,6 +248,18 @@ const state = {
   githubDefaultBranchSource: "fallback",
   githubBranchRequestId: 0,
   githubBranchTimer: null,
+  embedHtml: "",
+  embedMeta: clone(DEFAULT_EMBED_META),
+  embedLoaded: false,
+  cropImage: null,
+  cropObjectUrl: "",
+  cropImageRect: null,
+  cropSelection: null,
+  cropInteraction: null,
+  cropInteractionPointerId: null,
+  cropInteractionStartX: 0,
+  cropInteractionStartY: 0,
+  cropInteractionStartSelection: null,
 };
 
 const NAV_LINK_QUICK_PRESETS = Object.freeze([
@@ -586,6 +612,30 @@ function buildGitHubRepoUrl(repo) {
 
 function getEffectiveGitHubRepo(repoValue = state.data?.site?.githubRepo, locationRef = window.location) {
   return normalizeGitHubRepo(repoValue) || resolveGitHubRepoFromPagesLocation(locationRef);
+}
+
+function buildGitHubPagesBaseUrl(repo) {
+  const normalizedRepo = normalizeGitHubRepo(repo);
+  if (!normalizedRepo) return "";
+
+  const [owner, repoName] = normalizedRepo.split("/");
+  const isUserPageRepo = repoName.toLowerCase() === `${owner.toLowerCase()}.github.io`;
+  const projectPath = isUserPageRepo ? "" : `${encodeURIComponent(repoName)}/`;
+  return `https://${owner.toLowerCase()}.github.io/${projectPath}`;
+}
+
+function resolveGitHubPagesBaseUrl(locationRef = window.location, repoValue = state.data?.site?.githubRepo) {
+  const repo = getEffectiveGitHubRepo(repoValue, locationRef) || normalizeGitHubRepo(DEFAULT_DATA.site.githubRepo);
+  return buildGitHubPagesBaseUrl(repo);
+}
+
+function getDefaultEmbedMeta(locationRef = window.location, repoValue = state.data?.site?.githubRepo) {
+  const baseUrl = resolveGitHubPagesBaseUrl(locationRef, repoValue);
+  return {
+    ...DEFAULT_EMBED_META,
+    url: baseUrl || DEFAULT_EMBED_META.url,
+    image: baseUrl ? `${baseUrl}assets/social-preview.png` : DEFAULT_EMBED_META.image,
+  };
 }
 
 function getGitHubDefaultBranchNote(repo) {
@@ -1708,11 +1758,638 @@ function resolvePreviewAssetUrl(value) {
   return `../${raw.replace(/^\.?\//, "")}`;
 }
 
+function compactText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function escapeAttribute(value) {
+  return String(value || "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[char]);
+}
+
+function decodeHTML(value) {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = String(value || "");
+  return textarea.value;
+}
+
+function metaTag(propertyType, key, value) {
+  return `<meta ${propertyType}="${escapeAttribute(key)}" content="${escapeAttribute(value)}">`;
+}
+
+function buildEmbedHTML(meta = state.embedMeta) {
+  const defaults = getDefaultEmbedMeta();
+  const title = compactText(meta.title) || defaults.title;
+  const description = compactText(meta.description);
+  const image = compactText(meta.image) || defaults.image;
+  const url = compactText(meta.url) || defaults.url;
+  const imageAlt = compactText(meta.imageAlt);
+
+  return [
+    "<!-- OG START -->",
+    `<title>${escapeAttribute(title)}</title>`,
+    metaTag("property", "og:title", title),
+    description ? metaTag("property", "og:description", description) : "",
+    metaTag("property", "og:image", image),
+    metaTag("property", "og:url", url),
+    imageAlt ? metaTag("property", "og:image:alt", imageAlt) : "",
+    metaTag("name", "twitter:card", "summary_large_image"),
+    metaTag("name", "twitter:title", title),
+    description ? metaTag("name", "twitter:description", description) : "",
+    metaTag("name", "twitter:image", image),
+    "<!-- OG END -->",
+  ].filter(Boolean).join("\n");
+}
+
+function getMetaContent(doc, selector) {
+  return doc.querySelector(selector)?.getAttribute("content") || "";
+}
+
+function parseEmbedHTML(html) {
+  const source = String(html || "");
+  const doc = new DOMParser().parseFromString(`<head>${source}</head>`, "text/html");
+  const defaults = getDefaultEmbedMeta();
+  const title = compactText(doc.querySelector("title")?.textContent) || defaults.title;
+  const description = getMetaContent(doc, 'meta[property="og:description"]')
+    || getMetaContent(doc, 'meta[name="twitter:description"]')
+    || "";
+  const image = getMetaContent(doc, 'meta[property="og:image"]')
+    || getMetaContent(doc, 'meta[name="twitter:image"]')
+    || defaults.image;
+  const url = getMetaContent(doc, 'meta[property="og:url"]') || defaults.url;
+  const imageAlt = getMetaContent(doc, 'meta[property="og:image:alt"]') || defaults.imageAlt;
+
+  return {
+    title,
+    description,
+    image,
+    url,
+    imageAlt,
+    twitterCard: getMetaContent(doc, 'meta[name="twitter:card"]') || "summary_large_image",
+  };
+}
+
+function extractOGBlock(html) {
+  const match = String(html || "").match(/<!--\s*OG START\s*-->[\s\S]*?<!--\s*OG END\s*-->/i);
+  return match ? match[0].trim() : "";
+}
+
+function fallbackEmbedBlockFromHTML(html) {
+  const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+  const defaults = getDefaultEmbedMeta();
+  const meta = {
+    title: compactText(doc.querySelector("title")?.textContent) || defaults.title,
+    description: getMetaContent(doc, 'meta[property="og:description"]')
+      || getMetaContent(doc, 'meta[name="description"]')
+      || defaults.description,
+    image: getMetaContent(doc, 'meta[property="og:image"]') || defaults.image,
+    url: getMetaContent(doc, 'meta[property="og:url"]') || defaults.url,
+    imageAlt: getMetaContent(doc, 'meta[property="og:image:alt"]') || defaults.imageAlt,
+  };
+  return buildEmbedHTML(meta);
+}
+
+function syncEmbedFields(meta) {
+  const fields = {
+    "embed-meta-title": meta.title,
+    "embed-meta-description": meta.description,
+    "embed-meta-image": meta.image,
+    "embed-meta-url": meta.url,
+    "embed-meta-image-alt": meta.imageAlt,
+  };
+  Object.entries(fields).forEach(([id, value]) => {
+    const input = document.getElementById(id);
+    if (input) input.value = value || "";
+  });
+}
+
+function renderEmbedPreview(meta = state.embedMeta) {
+  const defaults = getDefaultEmbedMeta();
+  const title = compactText(meta.title) || defaults.title;
+  const description = compactText(meta.description);
+  const image = compactText(meta.image);
+  const url = compactText(meta.url);
+  const domain = (() => {
+    try {
+      return new URL(url).hostname;
+    } catch (error) {
+      return url || "미리보기 URL";
+    }
+  })();
+
+  const imageElement = $("#embed-preview-image");
+  const imageEmpty = $("#embed-preview-image-empty");
+  if (imageElement && imageEmpty) {
+    if (image) {
+      imageElement.hidden = false;
+      imageElement.src = image;
+      imageElement.alt = meta.imageAlt || title;
+      imageEmpty.hidden = true;
+      imageEmpty.textContent = "이미지 URL을 입력하면 이곳에 표시됩니다.";
+    } else {
+      imageElement.hidden = true;
+      imageElement.removeAttribute("src");
+      imageEmpty.hidden = false;
+      imageEmpty.textContent = "이미지 URL을 입력하면 이곳에 표시됩니다.";
+    }
+  }
+
+  const titleElement = $("#embed-preview-title");
+  const descriptionElement = $("#embed-preview-description");
+  const domainElement = $("#embed-preview-domain");
+  if (titleElement) titleElement.textContent = title;
+  if (domainElement) domainElement.textContent = domain;
+  if (descriptionElement) {
+    descriptionElement.textContent = description;
+    descriptionElement.hidden = !description;
+  }
+}
+
+function syncEmbedEditorFromHTML(html, { updateTextarea = false } = {}) {
+  const source = String(html || "").trim() || buildEmbedHTML(getDefaultEmbedMeta());
+  state.embedHtml = source;
+  state.embedMeta = parseEmbedHTML(source);
+  syncEmbedFields(state.embedMeta);
+  renderEmbedPreview(state.embedMeta);
+  if (updateTextarea) {
+    const output = $("#embed-html-output");
+    if (output) output.value = source;
+  }
+}
+
+function syncEmbedEditorFromFields() {
+  const meta = {
+    title: $("#embed-meta-title")?.value || "",
+    description: $("#embed-meta-description")?.value || "",
+    image: $("#embed-meta-image")?.value || "",
+    url: $("#embed-meta-url")?.value || "",
+    imageAlt: $("#embed-meta-image-alt")?.value || "",
+  };
+  const html = buildEmbedHTML(meta);
+  const output = $("#embed-html-output");
+  if (output) output.value = html;
+  syncEmbedEditorFromHTML(html);
+}
+
+async function loadEmbedHTMLFromIndex({ force = false } = {}) {
+  if (state.embedLoaded && !force) {
+    syncEmbedEditorFromHTML(state.embedHtml, { updateTextarea: true });
+    return;
+  }
+
+  const status = $("#embed-card-status");
+  if (status) status.textContent = "index.html의 임베드 카드 코드를 불러오는 중입니다...";
+
+  try {
+    const response = await fetch(indexHtmlPath, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const html = await response.text();
+    const block = extractOGBlock(html);
+    const nextHTML = block || fallbackEmbedBlockFromHTML(html);
+    state.embedLoaded = true;
+    syncEmbedEditorFromHTML(nextHTML, { updateTextarea: true });
+    if (status) {
+      status.textContent = block
+        ? "index.html에서 OG 블록을 불러왔습니다."
+        : "OG 블록이 없어 현재 head 정보를 기준으로 기본 코드를 만들었습니다.";
+    }
+  } catch (error) {
+    state.embedLoaded = true;
+    syncEmbedEditorFromHTML(buildEmbedHTML(getDefaultEmbedMeta()), { updateTextarea: true });
+    if (status) status.textContent = `index.html을 불러오지 못해 기본 코드로 시작합니다: ${error.message}`;
+  }
+}
+
+async function copyEmbedHTML() {
+  const output = $("#embed-html-output");
+  const code = output?.value || state.embedHtml || buildEmbedHTML(getDefaultEmbedMeta());
+  try {
+    await navigator.clipboard.writeText(code);
+    setStatus("임베드 카드 HTML 코드를 복사했습니다.", "success");
+  } catch (error) {
+    output?.focus();
+    output?.select();
+    setStatus("클립보드 복사가 막혔습니다. 코드 영역을 직접 복사해주세요.", "error");
+  }
+}
+
+function buildGitHubRepoFileUrl(filePath, mode = "blob") {
+  const repo = getEffectiveGitHubRepo(state.data.site.githubRepo, window.location);
+  if (!repo) return "";
+  const branch = getGitHubDefaultBranch(repo);
+  return `https://github.com/${repo}/${mode}/${encodeURIComponent(branch)}/${filePath.replace(/^\/+/, "")}`;
+}
+
+async function openGitHubRepoPath(filePath, mode = "edit") {
+  const repo = getEffectiveGitHubRepo(state.data.site.githubRepo, window.location);
+  if (!repo) {
+    setStatus("GitHub Repo를 입력하거나 GitHub Pages 배포 주소에서 열어주세요.", "error");
+    return;
+  }
+
+  const popup = window.open("", "_blank");
+  await ensureGitHubDefaultBranch(state.data.site.githubRepo, window.location);
+  const url = buildGitHubRepoFileUrl(filePath, mode);
+  if (!url) {
+    popup?.close();
+    setStatus("GitHub 경로를 만들지 못했습니다. GitHub Repo 설정을 확인해주세요.", "error");
+    return;
+  }
+  if (popup) {
+    popup.opener = null;
+    popup.location.href = url;
+  } else {
+    window.open(url, "_blank", "noopener");
+  }
+}
+
+function buildGitHubAssetsUploadUrl() {
+  const repo = getEffectiveGitHubRepo(state.data.site.githubRepo, window.location);
+  if (!repo) return "";
+  const branch = getGitHubDefaultBranch(repo);
+  return `https://github.com/${repo}/upload/${encodeURIComponent(branch)}/assets`;
+}
+
+async function openAssetsUploadPage() {
+  const repo = getEffectiveGitHubRepo(state.data.site.githubRepo, window.location);
+  if (!repo) {
+    setStatus("GitHub Repo를 입력하거나 GitHub Pages 배포 주소에서 열어주세요.", "error");
+    return;
+  }
+
+  const popup = window.open("", "_blank");
+  await ensureGitHubDefaultBranch(state.data.site.githubRepo, window.location);
+  const url = buildGitHubAssetsUploadUrl();
+  if (popup) {
+    popup.opener = null;
+    popup.location.href = url;
+  } else {
+    window.open(url, "_blank", "noopener");
+  }
+}
+
+function setEmbedImageStatus(message, type = "info") {
+  const status = $("#embed-image-status");
+  if (!status) return;
+  status.textContent = message;
+  status.dataset.state = type;
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getCropCanvasPoint(event, canvas = $("#embed-crop-canvas")) {
+  if (!canvas) return { x: 0, y: 0 };
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = rect.width ? canvas.width / rect.width : 1;
+  const scaleY = rect.height ? canvas.height / rect.height : 1;
+  return {
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY,
+  };
+}
+
+function getCropImageRect(canvas = $("#embed-crop-canvas")) {
+  const image = state.cropImage;
+  if (!canvas || !image?.naturalWidth || !image?.naturalHeight) return null;
+  const scale = Math.min(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight);
+  const width = image.naturalWidth * scale;
+  const height = image.naturalHeight * scale;
+  return {
+    x: (canvas.width - width) / 2,
+    y: (canvas.height - height) / 2,
+    width,
+    height,
+  };
+}
+
+function getCropSelectionMaxWidth(bounds) {
+  if (!bounds) return 0;
+  return Math.max(1, Math.min(bounds.width, bounds.height * socialPreviewAspect));
+}
+
+function fitCropSelectionToBounds(selection, bounds = state.cropImageRect) {
+  if (!bounds) return null;
+  const maxWidth = getCropSelectionMaxWidth(bounds);
+  const minWidth = Math.min(120, maxWidth);
+  const fallbackWidth = Math.min(maxWidth, bounds.width * 0.82, bounds.height * socialPreviewAspect * 0.82);
+  const width = clampNumber(Number(selection?.width) || fallbackWidth || maxWidth, minWidth, maxWidth);
+  const height = width / socialPreviewAspect;
+  const fallbackX = bounds.x + (bounds.width - width) / 2;
+  const fallbackY = bounds.y + (bounds.height - height) / 2;
+  const x = clampNumber(
+    Number.isFinite(selection?.x) ? selection.x : fallbackX,
+    bounds.x,
+    bounds.x + bounds.width - width,
+  );
+  const y = clampNumber(
+    Number.isFinite(selection?.y) ? selection.y : fallbackY,
+    bounds.y,
+    bounds.y + bounds.height - height,
+  );
+  return { x, y, width, height };
+}
+
+function createInitialCropSelection(bounds) {
+  if (!bounds) return null;
+  const maxWidth = getCropSelectionMaxWidth(bounds);
+  const width = Math.min(maxWidth, bounds.width * 0.82, bounds.height * socialPreviewAspect * 0.82);
+  return fitCropSelectionToBounds({ width }, bounds);
+}
+
+function updateCropSelectionOverlay(canvas = $("#embed-crop-canvas")) {
+  const selectionElement = $("#embed-crop-selection");
+  if (!selectionElement || !canvas || !state.cropImage || !state.cropSelection) {
+    if (selectionElement) selectionElement.hidden = true;
+    return;
+  }
+
+  const { x, y, width, height } = state.cropSelection;
+  selectionElement.hidden = false;
+  selectionElement.style.left = `${(x / canvas.width) * 100}%`;
+  selectionElement.style.top = `${(y / canvas.height) * 100}%`;
+  selectionElement.style.width = `${(width / canvas.width) * 100}%`;
+  selectionElement.style.height = `${(height / canvas.height) * 100}%`;
+}
+
+function drawCropEditorCanvas(canvas) {
+  if (!canvas) return;
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#10131a";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (!state.cropImage) {
+    state.cropImageRect = null;
+    state.cropSelection = null;
+    updateCropSelectionOverlay(canvas);
+    return;
+  }
+
+  const rect = getCropImageRect(canvas);
+  state.cropImageRect = rect;
+  state.cropSelection = state.cropSelection
+    ? fitCropSelectionToBounds(state.cropSelection, rect)
+    : createInitialCropSelection(rect);
+
+  context.drawImage(state.cropImage, rect.x, rect.y, rect.width, rect.height);
+  updateCropSelectionOverlay(canvas);
+}
+
+function getCropSourceRect(canvas = $("#embed-crop-canvas")) {
+  if (!canvas || !state.cropImage || !state.cropSelection) return null;
+  const imageRect = state.cropImageRect || getCropImageRect(canvas);
+  if (!imageRect) return null;
+  const selection = fitCropSelectionToBounds(state.cropSelection, imageRect);
+  state.cropSelection = selection;
+  return {
+    x: clampNumber(((selection.x - imageRect.x) / imageRect.width) * state.cropImage.naturalWidth, 0, state.cropImage.naturalWidth),
+    y: clampNumber(((selection.y - imageRect.y) / imageRect.height) * state.cropImage.naturalHeight, 0, state.cropImage.naturalHeight),
+    width: clampNumber((selection.width / imageRect.width) * state.cropImage.naturalWidth, 1, state.cropImage.naturalWidth),
+    height: clampNumber((selection.height / imageRect.height) * state.cropImage.naturalHeight, 1, state.cropImage.naturalHeight),
+  };
+}
+
+function drawCropPreviewCanvas(canvas) {
+  if (!canvas) return;
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#10131a";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const sourceRect = getCropSourceRect();
+  if (!sourceRect) return;
+  context.drawImage(
+    state.cropImage,
+    sourceRect.x,
+    sourceRect.y,
+    sourceRect.width,
+    sourceRect.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+}
+
+function renderCropCanvases() {
+  const editorCanvas = $("#embed-crop-canvas");
+  const previewCanvas = $("#embed-crop-preview");
+  drawCropEditorCanvas(editorCanvas);
+  drawCropPreviewCanvas(previewCanvas);
+
+  const placeholder = $("#embed-crop-placeholder");
+  if (placeholder) placeholder.hidden = Boolean(state.cropImage);
+}
+
+function resetCropSelection() {
+  state.cropImageRect = getCropImageRect();
+  state.cropSelection = createInitialCropSelection(state.cropImageRect);
+  renderCropCanvases();
+}
+
+function centerCropSelection() {
+  const bounds = state.cropImageRect || getCropImageRect();
+  if (!bounds || !state.cropSelection) return;
+  state.cropSelection = fitCropSelectionToBounds({
+    ...state.cropSelection,
+    x: bounds.x + (bounds.width - state.cropSelection.width) / 2,
+    y: bounds.y + (bounds.height - state.cropSelection.height) / 2,
+  }, bounds);
+  renderCropCanvases();
+}
+
+function resizeCropSelectionFromHandle(handle, point) {
+  const start = state.cropInteractionStartSelection;
+  const bounds = state.cropImageRect;
+  if (!start || !bounds) return null;
+
+  const dx = point.x - state.cropInteractionStartX;
+  const dy = point.y - state.cropInteractionStartY;
+  const touchesLeft = handle.includes("w");
+  const touchesRight = handle.includes("e");
+  const touchesTop = handle.includes("n");
+  const touchesBottom = handle.includes("s");
+  const touchesHorizontal = touchesLeft || touchesRight;
+  const touchesVertical = touchesTop || touchesBottom;
+
+  let nextWidth = start.width;
+  if (touchesHorizontal) {
+    nextWidth = start.width + (touchesRight ? dx : -dx);
+  }
+  if (touchesVertical) {
+    const nextHeight = start.height + (touchesBottom ? dy : -dy);
+    const widthFromHeight = nextHeight * socialPreviewAspect;
+    if (!touchesHorizontal || Math.abs(widthFromHeight - start.width) > Math.abs(nextWidth - start.width)) {
+      nextWidth = widthFromHeight;
+    }
+  }
+
+  const maxWidth = getCropSelectionMaxWidth(bounds);
+  const minWidth = Math.min(120, maxWidth);
+  const width = clampNumber(nextWidth, minWidth, maxWidth);
+  const height = width / socialPreviewAspect;
+  let x = start.x;
+  let y = start.y;
+
+  if (touchesLeft) {
+    x = start.x + start.width - width;
+  } else if (!touchesRight) {
+    x = start.x + (start.width - width) / 2;
+  }
+
+  if (touchesTop) {
+    y = start.y + start.height - height;
+  } else if (!touchesBottom) {
+    y = start.y + (start.height - height) / 2;
+  }
+
+  return fitCropSelectionToBounds({ x, y, width }, bounds);
+}
+
+function updateCropSelectionFromPointer(event) {
+  if (!state.cropInteraction || !state.cropImage || !state.cropInteractionStartSelection) return;
+
+  const point = getCropCanvasPoint(event);
+  if (state.cropInteraction === "move") {
+    const start = state.cropInteractionStartSelection;
+    const dx = point.x - state.cropInteractionStartX;
+    const dy = point.y - state.cropInteractionStartY;
+    state.cropSelection = fitCropSelectionToBounds({
+      ...start,
+      x: start.x + dx,
+      y: start.y + dy,
+    }, state.cropImageRect);
+  } else {
+    state.cropSelection = resizeCropSelectionFromHandle(state.cropInteraction, point);
+  }
+
+  renderCropCanvases();
+}
+
+function startCropSelectionInteraction(event) {
+  if (!state.cropImage || !state.cropSelection) return;
+  const selectionElement = $("#embed-crop-selection");
+  if (!selectionElement) return;
+
+  event.preventDefault();
+  const handle = event.target?.dataset?.handle || "move";
+  const point = getCropCanvasPoint(event);
+  state.cropInteraction = handle;
+  state.cropInteractionPointerId = event.pointerId;
+  state.cropInteractionStartX = point.x;
+  state.cropInteractionStartY = point.y;
+  state.cropInteractionStartSelection = { ...state.cropSelection };
+  selectionElement.classList.add("is-dragging");
+  selectionElement.setPointerCapture(event.pointerId);
+}
+
+function finishCropSelectionInteraction(event) {
+  const selectionElement = $("#embed-crop-selection");
+  if (!state.cropInteraction) return;
+  if (
+    event?.pointerId != null &&
+    selectionElement?.hasPointerCapture?.(event.pointerId)
+  ) {
+    selectionElement.releasePointerCapture(event.pointerId);
+  }
+  selectionElement?.classList.remove("is-dragging");
+  state.cropInteraction = null;
+  state.cropInteractionPointerId = null;
+  state.cropInteractionStartSelection = null;
+}
+
+function loadCropImage(src, { revokePrevious = false } = {}) {
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.onload = () => {
+    if (revokePrevious && state.cropObjectUrl) URL.revokeObjectURL(state.cropObjectUrl);
+    state.cropImage = image;
+    state.cropImageRect = null;
+    state.cropSelection = null;
+    state.cropInteraction = null;
+    renderCropCanvases();
+    setEmbedImageStatus("이미지를 불러왔습니다. 선택 박스를 움직이거나 크기를 조절해 구도를 맞춰주세요.", "success");
+  };
+  image.onerror = () => {
+    setEmbedImageStatus("이미지를 불러오지 못했습니다. 파일 업로드 또는 접근 가능한 이미지 URL을 사용해주세요.", "error");
+  };
+  image.src = src;
+}
+
+function loadCropImageFile(file) {
+  if (!file) return;
+  if (state.cropObjectUrl) URL.revokeObjectURL(state.cropObjectUrl);
+  state.cropObjectUrl = URL.createObjectURL(file);
+  loadCropImage(state.cropObjectUrl);
+}
+
+function downloadSocialPreviewPNG() {
+  const canvas = $("#embed-crop-canvas");
+  if (!canvas || !state.cropImage) {
+    setEmbedImageStatus("먼저 이미지를 불러와주세요.", "error");
+    return;
+  }
+
+  try {
+    const sourceRect = getCropSourceRect(canvas);
+    if (!sourceRect) {
+      setEmbedImageStatus("다운로드할 선택 영역을 찾지 못했습니다.", "error");
+      return;
+    }
+
+    const outputCanvas = document.createElement("canvas");
+    outputCanvas.width = socialPreviewWidth;
+    outputCanvas.height = socialPreviewHeight;
+    const context = outputCanvas.getContext("2d");
+    context.drawImage(
+      state.cropImage,
+      sourceRect.x,
+      sourceRect.y,
+      sourceRect.width,
+      sourceRect.height,
+      0,
+      0,
+      outputCanvas.width,
+      outputCanvas.height,
+    );
+
+    outputCanvas.toBlob((blob) => {
+      if (!blob) {
+        setEmbedImageStatus("PNG 다운로드를 만들지 못했습니다. URL 이미지라면 파일 업로드로 다시 시도해주세요.", "error");
+        return;
+      }
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = "social-preview.png";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+      setEmbedImageStatus("social-preview.png 파일을 다운로드했습니다.", "success");
+    }, "image/png");
+  } catch (error) {
+    setEmbedImageStatus("브라우저 보안 정책 때문에 PNG 다운로드가 막혔습니다. 파일 업로드로 다시 시도하세요.", "error");
+  }
+}
+
 function mountLivePreview() {
   const card = $("#live-preview-card");
   const panel = $(`.tab-panel[data-panel="${state.activeTab}"]`);
   const head = panel?.querySelector(".panel-head");
   if (!card || !panel || !head) return;
+
+  if (embedCardTabs.has(state.activeTab)) {
+    card.hidden = true;
+    return;
+  }
 
   head.insertAdjacentElement("afterend", card);
   card.hidden = false;
@@ -2651,6 +3328,7 @@ function buildLivePreviewMarkup() {
 }
 
 function renderLivePreview() {
+  if (embedCardTabs.has(state.activeTab)) return;
   mountLivePreview();
   const config = previewConfigForTab();
   $("#live-preview-title").textContent = config.title;
@@ -3594,6 +4272,9 @@ function renderAll() {
   renderFooterLinkList();
   refreshJsonOutput();
   renderLivePreview();
+  if (state.activeTab === "embed-card") {
+    void loadEmbedHTMLFromIndex();
+  }
 }
 
 function switchTab(tab) {
@@ -3611,6 +4292,8 @@ function switchTab(tab) {
   mountLivePreview();
   renderLivePreview();
   if (tab === "json") refreshJsonOutput();
+  if (tab === "embed-card") void loadEmbedHTMLFromIndex();
+  if (tab === "embed-image") renderCropCanvases();
 }
 
 function setFloatingActionsOpen(isOpen) {
@@ -3868,6 +4551,52 @@ function bindEvents() {
   $("#copy-json-panel")?.addEventListener("click", copyAllJson);
   $("#download-json-file")?.addEventListener("click", downloadJsonFile);
   $("#open-github-json")?.addEventListener("click", openGitHubJson);
+  $("#reload-embed-html")?.addEventListener("click", () => loadEmbedHTMLFromIndex({ force: true }));
+  $("#copy-embed-html")?.addEventListener("click", copyEmbedHTML);
+  $("#open-index-html")?.addEventListener("click", () => openGitHubRepoPath("index.html", "edit"));
+  $("#open-assets-upload")?.addEventListener("click", openAssetsUploadPage);
+  $("#download-social-preview")?.addEventListener("click", downloadSocialPreviewPNG);
+
+  ["embed-meta-title", "embed-meta-description", "embed-meta-image", "embed-meta-url", "embed-meta-image-alt"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", syncEmbedEditorFromFields);
+  });
+
+  $("#embed-html-output")?.addEventListener("input", (event) => {
+    syncEmbedEditorFromHTML(event.target.value);
+  });
+
+  $("#embed-preview-image")?.addEventListener("error", () => {
+    const imageElement = $("#embed-preview-image");
+    const imageEmpty = $("#embed-preview-image-empty");
+    if (imageElement) imageElement.hidden = true;
+    if (imageEmpty) {
+      imageEmpty.hidden = false;
+      imageEmpty.textContent = "이미지를 불러오지 못했습니다. 배포된 절대 URL을 확인하세요.";
+    }
+  });
+
+  $("#embed-image-file")?.addEventListener("change", (event) => {
+    loadCropImageFile(event.target.files?.[0]);
+  });
+
+  $("#load-embed-image-url")?.addEventListener("click", () => {
+    const url = String($("#embed-image-url")?.value || "").trim();
+    if (!url) {
+      setEmbedImageStatus("이미지 URL을 입력해주세요.", "error");
+      return;
+    }
+    loadCropImage(url);
+  });
+
+  $("#center-embed-crop")?.addEventListener("click", centerCropSelection);
+  $("#reset-embed-crop")?.addEventListener("click", resetCropSelection);
+
+  const cropSelection = $("#embed-crop-selection");
+  cropSelection?.addEventListener("pointerdown", startCropSelectionInteraction);
+  cropSelection?.addEventListener("pointermove", updateCropSelectionFromPointer);
+  cropSelection?.addEventListener("pointerup", finishCropSelectionInteraction);
+  cropSelection?.addEventListener("pointercancel", finishCropSelectionInteraction);
+  cropSelection?.addEventListener("lostpointercapture", finishCropSelectionInteraction);
 
   $("#floating-actions-toggle")?.addEventListener("click", () => {
     setFloatingActionsOpen(!$(".floating-actions")?.classList.contains("is-open"));

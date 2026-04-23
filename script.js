@@ -1841,10 +1841,49 @@ function renderFreeContent() {
   copy.textContent = content;
 }
 
+function compactMetaText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function getCurrentPageFile() {
+  const file = window.location.pathname.split("/").pop();
+  return file || "index.html";
+}
+
+function getCurrentPageMeta() {
+  const siteTitle = compactMetaText(DATA.site.title) || DEFAULT_DATA.site.title;
+  const siteDescription = compactMetaText(DATA.site.description) || DEFAULT_DATA.site.description;
+  const pageFile = getCurrentPageFile();
+
+  if (pageFile === "pricing.html") {
+    return {
+      title: "가격 페이지",
+      description: compactMetaText(DATA.pricing.description) || siteDescription,
+    };
+  }
+
+  if (pageFile === "contact.html") {
+    return {
+      title: "문의 페이지",
+      description: compactMetaText(DATA.contact.description) || siteDescription,
+    };
+  }
+
+  return {
+    title: siteTitle,
+    description: siteDescription,
+  };
+}
+
+function setMetaContent(selector, value) {
+  const element = document.querySelector(selector);
+  if (element) element.setAttribute("content", value);
+}
+
 function applySiteMeta() {
-  document.title = DATA.site.title || DEFAULT_DATA.site.title;
-  const desc = $("#site-desc");
-  if (desc) desc.setAttribute("content", DATA.site.description || "");
+  const meta = getCurrentPageMeta();
+  document.title = meta.title;
+  setMetaContent("#site-desc", meta.description);
 }
 
 function setMobileMenu(open) {
