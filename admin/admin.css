@@ -661,6 +661,10 @@ h3 {
   gap: 6px;
 }
 
+.field.is-disabled {
+  opacity: .58;
+}
+
 .field span {
   color: #355a6c;
   font-size: 12px;
@@ -687,6 +691,14 @@ h3 {
 .json-output:focus {
   border-color: var(--blue-strong);
   box-shadow: 0 0 0 3px rgba(168, 216, 240, .34);
+}
+
+.field input:disabled,
+.field select:disabled,
+.field textarea:disabled {
+  cursor: not-allowed;
+  background: #eef4f8;
+  color: #7a8793;
 }
 
 .field textarea,
@@ -914,6 +926,46 @@ h3 {
 .quick-link-preset-list button[disabled]:hover {
   border-color: var(--line);
   background: #f3f8fb;
+}
+
+.nav-test-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.nav-test-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+  padding: 14px;
+}
+
+.nav-test-card.is-current {
+  border-color: var(--blue-strong);
+  background: #e8f7ff;
+}
+
+.nav-test-card h4 {
+  margin: 0;
+  color: #174060;
+  font-size: 14px;
+}
+
+.nav-test-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.nav-test-card code {
+  border-radius: 7px;
+  background: rgba(23, 64, 96, .08);
+  padding: 1px 5px;
 }
 
 .icon-picker {
@@ -1764,6 +1816,7 @@ h3 {
   .summary-grid,
   .form-grid,
   .video-fields,
+  .nav-test-grid,
   .editor-row.two-col,
   .editor-row.three-col,
   .editor-row.four-col,
