@@ -152,6 +152,27 @@
     ],
     "videos": [
       {
+        "id": "iMqeophov9Q",
+        "title": "늦잠 음식 먹방 영상 포트폴리오",
+        "date": "",
+        "type": "long",
+        "category": "롱폼"
+      },
+      {
+        "id": "BFpS3H_LSGA",
+        "title": "저챗 포트폴리오",
+        "date": "",
+        "type": "long",
+        "category": "롱폼"
+      },
+      {
+        "id": "qFJStqVus8I",
+        "title": "침착맨 저쳇 ,먹방",
+        "date": "",
+        "type": "long",
+        "category": "롱폼"
+      },
+      {
         "id": "-J-b59dYZCg",
         "title": "100만 구독자를 보유한 한국 버추얼 채널들",
         "date": "",
@@ -171,20 +192,6 @@
         "date": "",
         "type": "short",
         "category": "숏츠"
-      },
-      {
-        "id": "iMqeophov9Q",
-        "title": "음식 먹방 포트폴리오",
-        "date": "",
-        "type": "long",
-        "category": "롱폼"
-      },
-      {
-        "id": "BFpS3H_LSGA",
-        "title": "저챗 포트폴리오",
-        "date": "",
-        "type": "long",
-        "category": "롱폼"
       }
     ]
   },
