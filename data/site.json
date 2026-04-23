@@ -14,6 +14,10 @@
           "href": "index.html#home"
         },
         {
+          "label": "영상 포트폴리오",
+          "href": "index.html#works"
+        },
+        {
           "label": "서비스 및 가격",
           "href": "pricing.html"
         },
@@ -83,12 +87,12 @@
         "items": [
           {
             "name": "Premiere Pro",
-            "logoUrl": "https://i.namu.wiki/i/-I37FZO_aiDvYxxaqoj7pcrzcxmJCNCFWG0fX0AOBxHFsbbR8vr5xA4j-VuMBXqMQyaaxIHHjpUj5FWF-iGIbQ.svg",
+            "logoUrl": "assets/tool-presets/premiere-pro.svg",
             "logoAlt": "Premiere Pro logo"
           },
           {
             "name": "Photoshop",
-            "logoUrl": "https://i.namu.wiki/i/eTXPZy7JtsDll90M6oE_BUH-Ep4-zbLon7Nfh-isgAiCxgVJj78usonWYepoNulVFiFklzZsCVCvxABmYtk4mA.svg",
+            "logoUrl": "assets/tool-presets/photoshop.svg",
             "logoAlt": "Photoshop logo"
           }
         ]
@@ -120,6 +124,7 @@
     "sectionTitle": "",
     "sectionDescription": "",
     "emptyText": "영상 항목을 추가하면 이 영역이 자동으로 채워집니다.",
+    "visualPreset": "reference",
     "displayMode": "category-stack",
     "gridColumns": 3,
     "categoryStackColumns": 4,
@@ -187,6 +192,8 @@
     "sectionEyebrow": "가격 템플릿",
     "title": "가격 및 안내",
     "description": "롱폼 , 숏폼",
+    "gridColumns": 2,
+    "processStyle": "minimal",
     "plans": [
       {
         "slug": "short",
