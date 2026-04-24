@@ -13,14 +13,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@100..900&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
   <script>
-    tailwind.config = {
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
       corePlugins: {
         preflight: false,
       },
     };
   </script>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link rel="stylesheet" href="admin.css?v=20260422-7">
+  <link rel="stylesheet" href="admin.css?v=20260424-3">
 </head>
 <body>
   <div class="admin-layout">
@@ -31,9 +32,16 @@
         <p>공개 페이지의 모든 텍스트와 링크를 JSON으로 관리합니다. 수정 후 복사해서 <code>data/site.json</code>에 반영하세요.</p>
       </div>
 
-      <nav class="admin-tabs" aria-label="편집 메뉴">
-        <button class="tab-button on" type="button" data-tab="works" aria-current="page">영상 포트폴리오</button>
-        <button class="tab-button" type="button" data-tab="projects">프로젝트</button>
+      <button class="mobile-tab-toggle" id="mobile-tab-toggle" type="button" aria-expanded="false" aria-controls="admin-tab-list">
+        <span class="mobile-tab-toggle-label">편집 메뉴</span>
+        <strong id="mobile-tab-current">퀵스타트</strong>
+        <span class="material-symbols-outlined mobile-tab-toggle-icon" aria-hidden="true">expand_more</span>
+      </button>
+
+      <nav class="admin-tabs" id="admin-tab-list" aria-label="편집 메뉴">
+        <button class="tab-button on" type="button" data-tab="quickstart" aria-current="page">퀵스타트</button>
+        <button class="tab-button" type="button" data-tab="works">영상 포트폴리오</button>
+        <button class="tab-button" type="button" data-tab="projects">유튜브/프로젝트</button>
         <button class="tab-button" type="button" data-tab="brand">브랜드 / 내비</button>
         <button class="tab-button" type="button" data-tab="hero">히어로</button>
         <button class="tab-button" type="button" data-tab="hero-panels">경력/툴/BGM</button>
@@ -111,6 +119,349 @@
       </section>
 
       <main>
+        <section class="tab-panel on" id="panel-quickstart" data-panel="quickstart">
+          <div class="panel-head">
+            <div>
+              <h2>퀵스타트</h2>
+              <p>처음 세팅에 필요한 핵심 값을 이전/다음 버튼으로 차례대로 수정합니다. 현재 단계에 맞는 미리보기를 보면서 진행하세요.</p>
+            </div>
+          </div>
+
+          <div class="quickstart-wizard" id="quickstart-wizard">
+            <header class="quickstart-stepper" id="quickstart-stepper" aria-label="퀵스타트 단계">
+              <div class="quickstart-stepper-copy">
+                <span class="quickstart-step-counter" id="quickstart-current-step">01 / 12</span>
+                <strong id="quickstart-current-title">사이트 정보</strong>
+                <p id="quickstart-current-description">사이트 제목, 설명, GitHub Repo, 브랜드명, 상단 버튼을 먼저 정리합니다.</p>
+              </div>
+              <div class="quickstart-step-dots" id="quickstart-step-dots" aria-label="단계 바로가기"></div>
+            </header>
+
+            <div class="quickstart-step-panels">
+              <section class="editor-card quickstart-card quickstart-step-panel is-active" id="quickstart-site-card" data-quickstart-step="site">
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">01</span>
+                  <div>
+                    <h3>사이트 정보</h3>
+                    <p class="field-note">사이트 제목, 설명, GitHub Repo, 브랜드명, 상단 버튼을 먼저 정리합니다.</p>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <label class="field" for="quickstart-site-title"><span>사이트 제목</span><input id="quickstart-site-title" type="text"></label>
+                  <label class="field" for="quickstart-site-description"><span>설명</span><input id="quickstart-site-description" type="text"></label>
+                  <label class="field span-2" for="quickstart-site-github-repo"><span>GitHub Repo</span><input id="quickstart-site-github-repo" type="text" placeholder="owner/repo"></label>
+                  <p class="field-note span-2" id="quickstart-site-github-repo-note">GitHub Pages에서 열면 현재 repo를 자동으로 감지합니다.</p>
+                  <label class="field" for="quickstart-brand-name"><span>브랜드 이름</span><input id="quickstart-brand-name" type="text" placeholder="your-name"></label>
+                  <label class="field" for="quickstart-nav-cta-label"><span>상단 버튼 문구</span><input id="quickstart-nav-cta-label" type="text"></label>
+                  <label class="field span-2" for="quickstart-nav-cta-href"><span>상단 버튼 링크</span><input id="quickstart-nav-cta-href" type="text" placeholder="contact.html"></label>
+                </div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-step-panel" id="quickstart-hero-card" data-quickstart-step="hero" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">02</span>
+                  <div>
+                    <h3>히어로 기본 정보</h3>
+                    <p class="field-note">첫 화면의 영상, 제목, 설명, 상태 문구를 바로 수정합니다.</p>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <label class="field span-2" for="quickstart-hero-video-url"><span>배경 영상 URL</span><input id="quickstart-hero-video-url" type="text" placeholder="MP4/WebM URL 또는 YouTube 링크 / ID"></label>
+                  <label class="field span-2" for="quickstart-hero-title"><span>제목</span><textarea id="quickstart-hero-title" rows="3" placeholder="줄바꿈이 필요한 경우 Enter로 나눠 입력하세요."></textarea></label>
+                  <label class="field" for="quickstart-hero-title-accent"><span>강조 단어</span><input id="quickstart-hero-title-accent" type="text" placeholder="#영상, 포트폴리오"></label>
+                  <label class="field span-2" for="quickstart-hero-description"><span>설명</span><textarea id="quickstart-hero-description" rows="4"></textarea></label>
+                  <label class="field" for="quickstart-hero-status-label"><span>상태 라벨</span><input id="quickstart-hero-status-label" type="text"></label>
+                  <label class="field" for="quickstart-hero-status-text"><span>상태 문구</span><input id="quickstart-hero-status-text" type="text"></label>
+                </div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-step-panel" id="quickstart-panels-card" data-quickstart-step="panels" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">03</span>
+                  <div>
+                    <h3>경력/툴/BGM</h3>
+                    <p class="field-note">카드 제목이 아니라 실제 경력사항 내용, 사용 가능한 툴, BGM 사용 툴을 이 단계에서 바로 관리합니다.</p>
+                  </div>
+                </div>
+                <div class="quickstart-inline-sections">
+                  <section class="quickstart-inline-section" aria-labelledby="quickstart-career-heading">
+                    <div class="section-row-head compact-head">
+                      <div>
+                        <h3 id="quickstart-career-heading">경력사항 내용 관리</h3>
+                        <p class="field-note">공개 형식을 고르고 경력 내용을 바로 추가·수정합니다.</p>
+                      </div>
+                      <button id="quickstart-add-career-structured" type="button">경력 추가</button>
+                    </div>
+                    <div class="form-grid">
+                      <label class="field" for="quickstart-career-mode">
+                        <span>공개 형식</span>
+                        <select id="quickstart-career-mode">
+                          <option value="structured">제목 + 기간 + 설명</option>
+                          <option value="simple">문장 + 기간</option>
+                          <option value="freeform">자유 텍스트</option>
+                        </select>
+                      </label>
+                      <label class="field span-2" for="quickstart-career-freeform"><span>자유 텍스트 경력</span><textarea id="quickstart-career-freeform" rows="5" placeholder="여러 줄 경력 설명을 입력하세요."></textarea></label>
+                    </div>
+                    <div class="quickstart-compact-list" id="quickstart-career-structured-list"></div>
+                  </section>
+
+                  <section class="quickstart-inline-section" aria-labelledby="quickstart-tools-heading">
+                    <div class="section-row-head compact-head">
+                      <div>
+                        <h3 id="quickstart-tools-heading">사용 가능한 툴</h3>
+                        <p class="field-note">Premiere Pro, After Effects 같은 작업 툴을 바로 추가합니다.</p>
+                      </div>
+                      <button id="quickstart-add-hero-tool" type="button">툴 추가</button>
+                    </div>
+                    <div class="preset-chip-list" id="quickstart-tool-presets" aria-label="퀵스타트 기본 툴 빠른 추가"></div>
+                    <div class="quickstart-compact-list" id="quickstart-tools-list"></div>
+                  </section>
+
+                  <section class="quickstart-inline-section" aria-labelledby="quickstart-bgm-heading">
+                    <div class="section-row-head compact-head">
+                      <div>
+                        <h3 id="quickstart-bgm-heading">BGM 사용 툴</h3>
+                        <p class="field-note">Artlist, Mewpot 같은 BGM 소스 플랫폼을 바로 추가합니다.</p>
+                      </div>
+                      <button id="quickstart-add-hero-bgm" type="button">BGM 툴 추가</button>
+                    </div>
+                    <div class="preset-chip-list" id="quickstart-bgm-presets" aria-label="퀵스타트 BGM 사용 툴 빠른 추가"></div>
+                    <div class="quickstart-compact-list" id="quickstart-bgm-list"></div>
+                  </section>
+                </div>
+                <div class="quickstart-summary-row" id="quickstart-resource-summary"></div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-step-panel" id="quickstart-process-card" data-quickstart-step="process" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">04</span>
+                  <div>
+                    <h3>프로세스</h3>
+                    <p class="field-note">표시 여부, 디자인 형식, 제목과 핵심 단계 목록을 compact하게 수정합니다.</p>
+                  </div>
+                </div>
+                <div class="toggle-grid">
+                  <label class="toggle-field" for="quickstart-pricing-process-enabled">
+                    <input id="quickstart-pricing-process-enabled" type="checkbox">
+                    <span>진행 프로세스 표시</span>
+                  </label>
+                </div>
+                <div id="quickstart-process-settings" class="quickstart-conditional-settings" data-quickstart-process-settings hidden>
+                  <div class="form-grid">
+                    <label class="field" for="quickstart-pricing-process-style">
+                      <span>프로세스 디자인 형식</span>
+                      <select id="quickstart-pricing-process-style">
+                        <option value="cards">cards</option>
+                        <option value="minimal">minimal</option>
+                        <option value="editorial">editorial</option>
+                      </select>
+                    </label>
+                    <label class="field span-2" for="quickstart-pricing-process-title"><span>제목</span><input id="quickstart-pricing-process-title" type="text"></label>
+                  </div>
+                  <div class="section-row-head compact-head">
+                    <h3>단계 목록</h3>
+                    <button id="quickstart-add-process-step" type="button">단계 추가</button>
+                  </div>
+                  <div class="quickstart-compact-list" id="quickstart-process-step-list"></div>
+                  <div class="quickstart-actions">
+                    <button type="button" data-jump-tab="stats-process" data-jump-target="process-step-list">프로세스 상세 탭 열기</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-step-panel" id="quickstart-pricing-card" data-quickstart-step="pricing" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">05</span>
+                  <div>
+                    <h3>가격</h3>
+                    <p class="field-note">가격 섹션 제목/설명과 주요 플랜을 빠르게 추가·수정합니다.</p>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <label class="field span-2" for="quickstart-pricing-title"><span>가격 섹션 제목</span><input id="quickstart-pricing-title" type="text"></label>
+                  <label class="field span-2" for="quickstart-pricing-description"><span>가격 섹션 설명</span><textarea id="quickstart-pricing-description" rows="4"></textarea></label>
+                </div>
+                <div class="section-row-head compact-head">
+                  <h3>가격 플랜</h3>
+                  <button id="quickstart-add-pricing-plan" type="button">플랜 추가</button>
+                </div>
+                <div class="quickstart-compact-list" id="quickstart-pricing-plan-list"></div>
+                <div class="quickstart-actions">
+                  <button type="button" data-jump-tab="pricing" data-jump-target="pricing-plan-list">가격 상세 탭 열기</button>
+                </div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-step-panel" id="quickstart-contact-card" data-quickstart-step="contact" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">06</span>
+                  <div>
+                    <h3>문의/푸터</h3>
+                    <p class="field-note">문의 제목/설명, 핵심 연락 카드, 푸터 표시와 기본 문구를 수정합니다.</p>
+                  </div>
+                </div>
+                <div class="toggle-grid">
+                  <label class="toggle-field" for="quickstart-footer-enabled">
+                    <input id="quickstart-footer-enabled" type="checkbox">
+                    <span>푸터 표시</span>
+                  </label>
+                </div>
+                <div class="form-grid">
+                  <label class="field span-2" for="quickstart-contact-title"><span>문의 제목</span><textarea id="quickstart-contact-title" rows="3"></textarea></label>
+                  <label class="field span-2" for="quickstart-contact-description"><span>문의 설명</span><textarea id="quickstart-contact-description" rows="4"></textarea></label>
+                  <label class="field" for="quickstart-contact-card-label"><span>연락 카드 라벨</span><input id="quickstart-contact-card-label" type="text"></label>
+                  <label class="field" for="quickstart-contact-card-value"><span>연락 카드 값</span><input id="quickstart-contact-card-value" type="text"></label>
+                  <label class="field span-2" for="quickstart-contact-card-href"><span>연락 카드 링크</span><input id="quickstart-contact-card-href" type="text" placeholder="https://... 또는 비워두기"></label>
+                  <label class="field" for="quickstart-footer-title"><span>푸터 제목</span><input id="quickstart-footer-title" type="text"></label>
+                  <label class="field span-2" for="quickstart-footer-copy"><span>저작권 문구</span><textarea id="quickstart-footer-copy" rows="3"></textarea></label>
+                </div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-card-compact quickstart-step-panel" id="quickstart-json-card" data-quickstart-step="json" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">07</span>
+                  <div>
+                    <h3>JSON</h3>
+                    <p class="field-note">수정 후 복사해서 <code>data/site.json</code>에 붙여 넣습니다. 기존 전체 JSON 복사 로직을 그대로 사용합니다.</p>
+                  </div>
+                </div>
+                <ol class="guide-steps quickstart-guide quickstart-json-guide" id="quickstart-json-guide">
+                  <li><strong>복사하기</strong> 버튼을 누릅니다.</li>
+                  <li><strong>JSON 탭 열기</strong> 버튼을 눌러 JSON 편집 화면으로 이동합니다.</li>
+                  <li>JSON 입력창에서 <kbd>Ctrl+A</kbd>로 내용을 전부 선택합니다.</li>
+                  <li>기존 내용을 삭제합니다.</li>
+                  <li>복사한 내용을 붙여넣기 합니다.</li>
+                  <li>오른쪽 위 초록버튼으로 변경 내용을 저장합니다.</li>
+                  <li>중앙에 나타나는 초록버튼을 다시 눌러 확정합니다.</li>
+                  <li>반영까지 약 <strong>1분 대기</strong>합니다.</li>
+                </ol>
+                <div class="quickstart-actions">
+                  <button class="primary-action" id="quickstart-copy-json" type="button">복사하기</button>
+                  <button type="button" data-jump-tab="json" data-jump-target="json-output">JSON 탭 열기</button>
+                </div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-card-compact quickstart-step-panel" id="quickstart-embed-image-card" data-quickstart-step="embed-image" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">08</span>
+                  <div>
+                    <h3>임베드 카드 미리보기</h3>
+                    <p class="field-note">대표 이미지를 이 단계에서 바로 추가하고 카드 구도를 확인한 뒤 <code>social-preview.png</code>로 저장합니다.</p>
+                  </div>
+                </div>
+                <div class="quickstart-embed-image-grid">
+                  <section class="quickstart-embed-preview-panel" aria-label="임베드 카드 미리보기">
+                    <canvas id="quickstart-embed-crop-preview" class="crop-preview-canvas quickstart-embed-crop-preview" width="1200" height="630" aria-label="퀵스타트 임베드 카드 미리보기"></canvas>
+                    <p class="field-note" id="quickstart-embed-image-status" aria-live="polite">이미지를 추가하면 이곳에서 임베드 카드 대표 이미지 구도를 확인할 수 있습니다.</p>
+                  </section>
+                  <div class="form-grid quickstart-image-loader">
+                    <label class="field" for="quickstart-embed-image-file"><span>이미지 파일 추가</span><input id="quickstart-embed-image-file" type="file" accept="image/*"></label>
+                    <label class="field" for="quickstart-embed-image-url"><span>이미지 URL</span><input id="quickstart-embed-image-url" type="url" placeholder="https://example.com/image.png"></label>
+                    <div class="span-2 url-actions">
+                      <button class="primary-action" id="quickstart-load-embed-image-url" type="button">URL 이미지 추가</button>
+                      <span class="field-note">URL 이미지는 브라우저 보안 정책 때문에 PNG 다운로드가 막힐 수 있습니다. 실패하면 파일 업로드로 다시 시도하세요.</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="quickstart-actions">
+                  <button class="primary-action" type="button" id="quickstart-download-social-preview">PNG 다운로드</button>
+                </div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-card-compact quickstart-step-panel" id="quickstart-embed-upload-card" data-quickstart-step="embed-upload" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">09</span>
+                  <div>
+                    <h3>GitHub assets 업로드</h3>
+                    <p class="field-note">다운로드한 <code>social-preview.png</code>를 GitHub 레포의 <code>assets/</code> 폴더에 업로드합니다.</p>
+                  </div>
+                </div>
+                <ol class="guide-steps quickstart-guide">
+                  <li><strong>assets 업로드 페이지 열기</strong> 버튼으로 GitHub 업로드 화면을 엽니다.</li>
+                  <li>파일명을 반드시 <code>social-preview.png</code>로 유지해서 업로드합니다.</li>
+                  <li>업로드 후 아래 체크박스를 켜고 다음 단계로 이동합니다.</li>
+                </ol>
+                <div class="toggle-grid">
+                  <label class="toggle-field" for="quickstart-embed-upload-done">
+                    <input id="quickstart-embed-upload-done" type="checkbox">
+                    <span>assets 업로드 완료</span>
+                  </label>
+                </div>
+                <div class="quickstart-actions">
+                  <button class="primary-action" type="button" id="quickstart-open-assets-upload">assets 업로드 페이지 열기</button>
+                </div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-card-compact quickstart-step-panel" id="quickstart-embed-card-step" data-quickstart-step="embed-card" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">10</span>
+                  <div>
+                    <h3>임베드 카드 수정</h3>
+                    <p class="field-note">카드 제목, 설명, 대표 이미지 URL을 확인하고 GitHub에 붙여넣을 HTML을 생성합니다.</p>
+                  </div>
+                </div>
+                <div class="form-grid quickstart-embed-meta-grid">
+                  <label class="field span-2" for="quickstart-embed-meta-title"><span>카드 제목</span><input id="quickstart-embed-meta-title" type="text" placeholder="영상 포트폴리오 템플릿"></label>
+                  <label class="field span-2" for="quickstart-embed-meta-description"><span>카드 설명</span><textarea id="quickstart-embed-meta-description" rows="3" placeholder="Discord, Notion 등에 보일 설명을 입력하세요."></textarea></label>
+                  <label class="field span-2" for="quickstart-embed-meta-image"><span>대표 이미지 URL</span><input id="quickstart-embed-meta-image" type="text" placeholder="https://.../assets/social-preview.png"></label>
+                  <label class="field span-2" for="quickstart-embed-meta-url"><span>페이지 URL</span><input id="quickstart-embed-meta-url" type="text" placeholder="https://.../"></label>
+                  <label class="field span-2" for="quickstart-embed-meta-image-alt"><span>이미지 대체 문구</span><input id="quickstart-embed-meta-image-alt" type="text" placeholder="공유 이미지 설명"></label>
+                </div>
+                <div class="quickstart-actions">
+                  <button class="primary-action" type="button" id="quickstart-copy-embed-html">HTML 코드 복사</button>
+                </div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-card-compact quickstart-step-panel" id="quickstart-embed-index-card" data-quickstart-step="embed-index" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">11</span>
+                  <div>
+                    <h3>GitHub index.html 수정</h3>
+                    <p class="field-note">GitHub에서 <code>index.html</code>을 직접 열고 <code>OG START</code>부터 <code>OG END</code>까지 교체합니다.</p>
+                  </div>
+                </div>
+                <ol class="guide-steps quickstart-guide">
+                  <li><strong>HTML 코드 복사</strong>로 생성된 OG 코드를 복사합니다.</li>
+                  <li><strong>GitHub index.html 편집 열기</strong>로 파일 편집 화면을 엽니다.</li>
+                  <li><code>&lt;!-- OG START --&gt;</code>부터 <code>&lt;!-- OG END --&gt;</code>까지 기존 코드를 지우고 붙여넣습니다.</li>
+                  <li>저장 후 Discord 등에서 캐시가 남으면 URL 뒤에 <code>?v=2</code>를 붙여 확인합니다.</li>
+                </ol>
+                <div class="toggle-grid">
+                  <label class="toggle-field" for="quickstart-embed-index-done">
+                    <input id="quickstart-embed-index-done" type="checkbox">
+                    <span>index.html OG 블록 수정 완료</span>
+                  </label>
+                </div>
+                <div class="quickstart-actions">
+                  <button type="button" id="quickstart-copy-embed-html-index">HTML 코드 복사</button>
+                  <button class="primary-action" type="button" id="quickstart-open-index-editor">GitHub index.html 편집 열기</button>
+                </div>
+              </section>
+
+              <section class="editor-card quickstart-card quickstart-card-compact quickstart-step-panel" id="quickstart-done-card" data-quickstart-step="done" hidden>
+                <div class="quickstart-card-head">
+                  <span class="quickstart-step">12</span>
+                  <div>
+                    <h3>완료/최종 확인</h3>
+                    <p class="field-note">JSON과 임베드 설정을 최종 확인하고 실제 페이지에서 결과를 점검합니다.</p>
+                  </div>
+                </div>
+                <div class="quickstart-summary-row" id="quickstart-finish-summary"></div>
+                <div class="quickstart-actions">
+                  <button type="button" data-jump-tab="json" data-jump-target="json-output">JSON 확인 열기</button>
+                  <button type="button" data-jump-tab="embed-card" data-jump-target="embed-html-output">임베드 코드 확인 열기</button>
+                  <a class="preview-open-link" href="../index.html" target="_blank" rel="noopener">공개 페이지 열기</a>
+                </div>
+              </section>
+            </div>
+
+            <footer class="quickstart-wizard-footer" aria-label="퀵스타트 단계 이동">
+              <button id="quickstart-prev" type="button">이전</button>
+              <button class="primary-action" id="quickstart-next" type="button">다음</button>
+            </footer>
+          </div>
+        </section>
+
         <section class="tab-panel" id="panel-brand" data-panel="brand">
           <div class="panel-head">
             <div>
@@ -130,12 +481,12 @@
           </section>
 
           <section class="editor-card detail-section">
-            <h3>브랜드 / CTA</h3>
+            <h3>브랜드 / 버튼</h3>
             <div class="form-grid">
               <label class="field" for="brand-prefix"><span>브랜드 앞말</span><input id="brand-prefix" type="text" placeholder="studio"></label>
               <label class="field" for="brand-name"><span>브랜드 이름</span><input id="brand-name" type="text" placeholder="your-name"></label>
-              <label class="field" for="nav-cta-label"><span>상단 CTA 라벨</span><input id="nav-cta-label" type="text"></label>
-              <label class="field" for="nav-cta-href"><span>상단 CTA 링크</span><input id="nav-cta-href" type="text" placeholder="contact.html"></label>
+              <label class="field" for="nav-cta-label"><span>상단 버튼 문구</span><input id="nav-cta-label" type="text"></label>
+              <label class="field" for="nav-cta-href"><span>상단 버튼 링크</span><input id="nav-cta-href" type="text" placeholder="contact.html"></label>
             </div>
           </section>
 
@@ -169,7 +520,7 @@
           <div class="panel-head">
             <div>
               <h2>히어로</h2>
-              <p>배경 영상, 헤드라인, 소개 문구, 상태 배지와 CTA 등 히어로 상단 내용을 설정합니다.</p>
+              <p>배경 영상, 헤드라인, 소개 문구, 상태 배지와 버튼 등 히어로 상단 내용을 설정합니다.</p>
             </div>
           </div>
 
@@ -187,7 +538,11 @@
                 <textarea id="hero-title" rows="3" placeholder="줄바꿈이 필요한 경우 Enter로 나눠 입력하세요."></textarea>
                 <span class="field-note">줄바꿈이 공개 페이지 제목에도 그대로 반영됩니다.</span>
               </label>
-              <label class="field" for="hero-title-accent"><span>강조 단어</span><input id="hero-title-accent" type="text"></label>
+              <label class="field" for="hero-title-accent">
+                <span>강조 단어</span>
+                <input id="hero-title-accent" type="text" placeholder="#영상, 포트폴리오">
+                <span class="field-note">`#` 또는 `,`로 여러 단어를 나눠 입력할 수 있습니다.</span>
+              </label>
               <label class="field span-2" for="hero-description">
                 <span>설명</span>
                 <textarea id="hero-description" rows="4"></textarea>
@@ -218,13 +573,13 @@
           <section class="editor-card detail-section">
             <div class="section-row-head">
               <div>
-                <h3>레이아웃 비율</h3>
+                <h3>배치 비율</h3>
                 <p class="field-note">세 카드가 모두 채워졌을 때만 적용됩니다.</p>
               </div>
             </div>
             <div class="form-grid">
               <label class="field" for="hero-info-layout-preset">
-                <span>3분할 비율</span>
+                <span>3분할 배치 비율</span>
                 <select id="hero-info-layout-preset">
                   <option value="1:1">1:1 · 좌측 경력 / 우측 상하 분할</option>
                   <option value="2:1:1">2:1:1 · 가로 3분할</option>
@@ -341,8 +696,8 @@
         <section class="tab-panel" id="panel-projects" data-panel="projects">
           <div class="panel-head">
             <div>
-              <h2>프로젝트</h2>
-              <p>프로젝트 섹션 헤더와 카드형 작업물을 순서대로 관리합니다.</p>
+              <h2>유튜브 채널/프로젝트 카드 추가</h2>
+              <p>프로젝트 섹션 헤더, 유튜브 채널 카드, 카드형 작업물을 순서대로 관리합니다.</p>
             </div>
           </div>
 
@@ -352,6 +707,10 @@
               <label class="toggle-field" for="projects-enabled">
                 <input id="projects-enabled" type="checkbox">
                 <span>프로젝트 섹션 표시</span>
+              </label>
+              <label class="toggle-field" for="projects-youtube-channel-enabled">
+                <input id="projects-youtube-channel-enabled" type="checkbox">
+                <span>유튜브 채널 카드 표시</span>
               </label>
             </div>
             <p class="field-note">끄면 공개 페이지의 프로젝트 섹션은 숨겨지고, 내부 <code>#projects</code> 링크는 영상 포트폴리오 또는 홈으로 자동 연결됩니다.</p>
@@ -368,6 +727,27 @@
 
           <section class="editor-card detail-section">
             <div class="section-row-head">
+              <div>
+                <h3>유튜브 채널 카드</h3>
+                <p class="field-note">채널 URL을 입력하면 가능한 채널명과 프로필 이미지를 자동으로 채웁니다. 보이는 문구는 직접 보정할 수 있습니다.</p>
+              </div>
+            </div>
+            <div class="inline-preview-card span-2" id="projects-youtube-channel-preview"></div>
+            <div class="form-grid">
+              <label class="field span-2" for="projects-youtube-channel-url"><span>채널 URL</span><input id="projects-youtube-channel-url" type="text" placeholder="https://www.youtube.com/@channel-name"></label>
+              <p id="projects-youtube-channel-feedback" class="field-note span-2 youtube-channel-feedback">채널 URL을 입력하면 자동으로 정보를 확인합니다.</p>
+              <label class="field" for="projects-youtube-channel-avatar"><span>프로필 이미지 URL</span><input id="projects-youtube-channel-avatar" type="text" placeholder="https://..."></label>
+              <label class="field" for="projects-youtube-channel-name"><span>채널명</span><input id="projects-youtube-channel-name" type="text" placeholder="Maro Note"></label>
+              <label class="field" for="projects-youtube-channel-handle"><span>핸들</span><input id="projects-youtube-channel-handle" type="text" placeholder="@maro_note"></label>
+              <label class="field" for="projects-youtube-channel-subscriber"><span>구독자 문구</span><input id="projects-youtube-channel-subscriber" type="text" placeholder="구독자 6.51천명"></label>
+              <label class="field" for="projects-youtube-channel-videos"><span>영상 수 문구</span><input id="projects-youtube-channel-videos" type="text" placeholder="동영상 137개"></label>
+              <label class="field span-2" for="projects-youtube-channel-description"><span>소개 문구</span><textarea id="projects-youtube-channel-description" rows="3" placeholder="잘 부탁드립니다. ...더보기"></textarea></label>
+            </div>
+          </section>
+
+          <section class="editor-card detail-section">
+            <div class="detail-section-preheader" id="projects-card-only-preview"></div>
+            <div class="section-row-head">
               <h3>프로젝트 카드</h3>
               <button id="add-project-card" type="button">카드 추가</button>
             </div>
@@ -375,11 +755,11 @@
           </section>
         </section>
 
-        <section class="tab-panel on" id="panel-works" data-panel="works">
+        <section class="tab-panel" id="panel-works" data-panel="works">
           <div class="panel-head">
             <div>
               <h2>영상 포트폴리오</h2>
-              <p>표시 방식과 카테고리 정렬을 먼저 정하고, 아래에서 YouTube 영상을 등록해 전체 레이아웃을 완성합니다.</p>
+              <p>표시 방식과 카테고리 정렬을 먼저 정하고, 아래에서 YouTube 영상을 등록해 전체 배치를 완성합니다.</p>
             </div>
           </div>
 
@@ -398,12 +778,12 @@
             <div class="section-row-head">
               <div>
                 <h3>표시 방식 설정</h3>
-                <p class="field-note">현재 그리드형과 카테고리별 세로 스택형 중 하나를 선택할 수 있습니다.</p>
+                <p class="field-note">기본 그리드, 카테고리별 세로 스택, 하이브리드 표시 방식을 선택할 수 있습니다.</p>
               </div>
             </div>
             <div class="form-grid">
               <label class="field" for="works-visual-preset">
-                <span>비주얼 프리셋</span>
+                <span>디자인 형식</span>
                 <select id="works-visual-preset">
                   <option value="reference">reference</option>
                   <option value="panel">panel</option>
@@ -416,6 +796,7 @@
                 <select id="works-display-mode">
                   <option value="grid">기본 그리드</option>
                   <option value="category-stack">카테고리별 세로 스택</option>
+                  <option value="hybrid">하이브리드</option>
                 </select>
               </label>
             </div>
@@ -471,7 +852,7 @@
                     <span>타입 필터 표시</span>
                   </label>
                 </div>
-                <p class="field-note">세로 스택 방식에서는 `전체 / 롱폼 / 숏폼` 타입 필터만 선택적으로 노출됩니다.</p>
+                <p class="field-note" id="works-category-stack-filter-note">세로 스택 방식에서는 `전체 / 롱폼 / 숏폼` 타입 필터만 선택적으로 노출됩니다.</p>
               </section>
             </div>
           </section>
@@ -574,7 +955,7 @@
             <h3>프로세스 설정</h3>
             <div class="form-grid">
               <label class="field" for="pricing-process-style">
-                <span>프로세스 프리셋</span>
+                <span>프로세스 디자인 형식</span>
                 <select id="pricing-process-style">
                   <option value="cards">cards</option>
                   <option value="minimal">minimal</option>
@@ -679,7 +1060,11 @@
                 <textarea id="contact-title" rows="3"></textarea>
                 <span class="field-note">Enter로 줄을 나누면 공개 페이지 제목에도 그대로 반영됩니다.</span>
               </label>
-              <label class="field" for="contact-title-accent"><span>강조 단어</span><input id="contact-title-accent" type="text"></label>
+              <label class="field" for="contact-title-accent">
+                <span>강조 단어</span>
+                <input id="contact-title-accent" type="text" placeholder="#이메일, 문의">
+                <span class="field-note">`#` 또는 `,`로 여러 단어를 나눠 입력할 수 있습니다.</span>
+              </label>
               <label class="field span-2" for="contact-description"><span>설명</span><textarea id="contact-description" rows="4"></textarea></label>
             </div>
           </section>
@@ -774,7 +1159,7 @@
             </ol>
           </section>
 
-          <section class="editor-card detail-section">
+          <section class="editor-card detail-section" data-no-detail-toggle="true">
             <h3>카드 미리보기</h3>
             <p class="field-note" id="embed-card-status">index.html의 임베드 카드 코드를 불러오는 중입니다...</p>
             <article class="embed-card-preview" aria-label="임베드 카드 미리보기">
@@ -845,6 +1230,12 @@
             </ol>
           </section>
 
+          <section class="editor-card detail-section" data-no-detail-toggle="true">
+            <h3>임베드 카드 미리보기</h3>
+            <canvas id="embed-crop-preview" class="crop-preview-canvas" width="1200" height="630" aria-label="임베드 카드 미리보기"></canvas>
+            <p class="field-note">큰 이미지는 플랫폼마다 자동으로 잘리거나 축소될 수 있습니다. 원하는 구도를 유지하려면 사용할 플랫폼에 맞는 비율을 선택해서 잘라 업로드하세요. 가장 호환성이 좋은 기본값은 1200×630입니다.</p>
+          </section>
+
           <section class="editor-card detail-section">
             <h3>이미지 불러오기</h3>
             <div class="form-grid">
@@ -910,12 +1301,6 @@
               </aside>
             </div>
           </section>
-
-          <section class="editor-card detail-section">
-            <h3>임베드 카드 미리보기</h3>
-            <canvas id="embed-crop-preview" class="crop-preview-canvas" width="1200" height="630" aria-label="임베드 카드 미리보기"></canvas>
-            <p class="field-note">큰 이미지는 플랫폼마다 자동으로 잘리거나 축소될 수 있습니다. 원하는 구도를 유지하려면 사용할 플랫폼에 맞는 비율을 선택해서 잘라 업로드하세요. 가장 호환성이 좋은 기본값은 1200×630입니다.</p>
-          </section>
         </section>
       </main>
     </div>
@@ -934,6 +1319,6 @@
     </section>
   </div>
 
-  <script src="admin.js?v=20260423-1"></script>
+  <script src="admin.js?v=20260424-3"></script>
 </body>
 </html>

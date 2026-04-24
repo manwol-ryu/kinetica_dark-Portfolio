@@ -77,6 +77,16 @@ const DEFAULT_DATA = {
     sectionEyebrow: "",
     sectionTitle: "",
     sectionMeta: "",
+    youtubeChannel: {
+      enabled: false,
+      url: "",
+      avatarUrl: "",
+      name: "",
+      handle: "",
+      subscriberText: "",
+      videoCountText: "",
+      description: "",
+    },
     cards: [],
   },
   stats: {
@@ -217,6 +227,18 @@ function escapeWithBreaks(value) {
   return escapeHTML(value).replace(/\n/g, "<br>");
 }
 
+function normalizeAccentKeywords(value) {
+  const seen = new Set();
+  return String(value || "")
+    .split(/[#,\n，]/)
+    .map((item) => item.trim())
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
+}
+
 function videoThumb(id) {
   return `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`;
 }
@@ -236,6 +258,69 @@ function formatWorksDate(value) {
   return `${year}. ${month}. ${day}`;
 }
 
+function normalizeProjectYouTubeChannel(channel) {
+  return {
+    enabled: normalizeEnabled(channel?.enabled, DEFAULT_DATA.projects.youtubeChannel.enabled),
+    url: String(channel?.url || "").trim(),
+    avatarUrl: String(channel?.avatarUrl || "").trim(),
+    name: String(channel?.name || "").trim(),
+    handle: String(channel?.handle || "").trim(),
+    subscriberText: String(channel?.subscriberText || "").trim(),
+    videoCountText: String(channel?.videoCountText || "").trim(),
+    description: String(channel?.description || "").trim(),
+  };
+}
+
+function hasProjectYouTubeChannel(channel) {
+  const normalized = normalizeProjectYouTubeChannel(channel);
+  return normalized.enabled !== false && Boolean(normalized.url && (normalized.name || normalized.handle));
+}
+
+function renderProjectYouTubeChannelAvatar(channel) {
+  const avatarUrl = String(channel?.avatarUrl || "").trim();
+  if (avatarUrl) {
+    return `<img class="h-20 w-20 rounded-full object-cover md:h-24 md:w-24" src="${escapeHTML(avatarUrl)}" alt="${escapeHTML(channel?.name || "유튜브 채널 프로필")}" loading="lazy" referrerpolicy="no-referrer">`;
+  }
+
+  const fallback = escapeHTML(
+    String(channel?.name || channel?.handle || "YT")
+      .trim()
+      .replace(/^@/, "")
+      .slice(0, 2)
+      .toUpperCase() || "YT"
+  );
+  return `
+    <div class="flex h-20 w-20 items-center justify-center rounded-full bg-white/10 text-2xl font-black tracking-tight text-white md:h-24 md:w-24 md:text-3xl">
+      ${fallback}
+    </div>
+  `;
+}
+
+function renderProjectYouTubeChannelCard(channel) {
+  const normalized = normalizeProjectYouTubeChannel(channel);
+  if (!hasProjectYouTubeChannel(normalized)) return "";
+
+  const href = resolvePreviewAwareHref(normalized.url);
+  const external = isExternalHref(href) ? ' target="_blank" rel="noopener"' : "";
+  const metaParts = [normalized.handle, normalized.subscriberText, normalized.videoCountText].filter(Boolean);
+  const description = normalized.description
+    ? `<p class="mt-4 text-sm leading-relaxed text-white/72 md:text-base">${escapeHTML(normalized.description)}</p>`
+    : "";
+
+  return `
+    <a href="${escapeHTML(href)}" class="group flex flex-col gap-5 overflow-hidden rounded-[28px] border border-white/10 bg-[#111111] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-white/20 md:flex-row md:items-center md:gap-7 md:p-7"${external}>
+      <div class="shrink-0">
+        ${renderProjectYouTubeChannelAvatar(normalized)}
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="text-3xl font-black tracking-tight text-white md:text-[2.25rem]">${escapeHTML(normalized.name || normalized.handle)}</div>
+        ${metaParts.length ? `<div class="mt-2 text-sm font-semibold text-white/78 md:text-base">${escapeHTML(metaParts.join(" · "))}</div>` : ""}
+        ${description}
+      </div>
+    </a>
+  `;
+}
+
 function getWorksCategories(videos) {
   const seen = new Set();
   return (Array.isArray(videos) ? videos : []).reduce((result, video) => {
@@ -248,6 +333,12 @@ function getWorksCategories(videos) {
 }
 
 function normalizeWorksDisplayMode(value) {
+  return ["grid", "category-stack", "hybrid"].includes(String(value || "").trim())
+    ? String(value).trim()
+    : "grid";
+}
+
+function normalizeWorksCategoryDisplayMode(value) {
   return value === "category-stack" ? "category-stack" : "grid";
 }
 
@@ -311,6 +402,7 @@ function normalizeWorksCategoryEntries(items, videos, order) {
         category: String(item?.category || "").trim(),
         title: String(item?.title || "").trim(),
         meta: String(item?.meta || item?.description || "").trim(),
+        displayMode: normalizeWorksCategoryDisplayMode(item?.displayMode),
         columns: Number.isInteger(Number(item?.columns)) ? Number(item.columns) : null,
         singleColumnSize: ["large", "medium", "small"].includes(String(item?.singleColumnSize || "").trim())
           ? String(item.singleColumnSize).trim()
@@ -326,6 +418,7 @@ function normalizeWorksCategoryEntries(items, videos, order) {
       category,
       title: String(entry?.title || "").trim(),
       meta: String(entry?.meta || "").trim(),
+      displayMode: normalizeWorksCategoryDisplayMode(entry?.displayMode),
       columns: Number.isInteger(Number(entry?.columns)) && Number(entry.columns) >= 1 && Number(entry.columns) <= 8
         ? Number(entry.columns)
         : null,
@@ -648,6 +741,7 @@ function normalizeData(input) {
       ...clone(DEFAULT_DATA.projects),
       ...(source.projects || {}),
       enabled: normalizeEnabled(source.projects?.enabled, DEFAULT_DATA.projects.enabled),
+      youtubeChannel: normalizeProjectYouTubeChannel(source.projects?.youtubeChannel),
       cards: Array.isArray(source.projects?.cards)
         ? source.projects.cards.map((card) => ({
             layout: ["featured", "secondary", "small"].includes(card?.layout) ? card.layout : "small",
@@ -909,17 +1003,29 @@ function pageTargetFromHref(href) {
 
 function renderAccentText(text, accent, accentClass) {
   const raw = String(text || "");
-  const marker = String(accent || "").trim();
+  const markers = normalizeAccentKeywords(accent)
+    .slice()
+    .sort((left, right) => right.length - left.length || left.localeCompare(right));
   if (!raw) return "";
-  if (!marker) return escapeHTML(raw).replace(/\n/g, "<br>");
+  if (!markers.length) return escapeHTML(raw).replace(/\n/g, "<br>");
 
-  const index = raw.indexOf(marker);
-  if (index === -1) return escapeHTML(raw).replace(/\n/g, "<br>");
+  let output = "";
+  let index = 0;
 
-  const before = escapeHTML(raw.slice(0, index)).replace(/\n/g, "<br>");
-  const middle = escapeHTML(marker);
-  const after = escapeHTML(raw.slice(index + marker.length)).replace(/\n/g, "<br>");
-  return `${before}<span class="${accentClass}">${middle}</span>${after}`;
+  while (index < raw.length) {
+    const match = markers.find((marker) => raw.startsWith(marker, index));
+    if (match) {
+      output += `<span class="${accentClass}">${escapeHTML(match)}</span>`;
+      index += match.length;
+      continue;
+    }
+
+    const char = raw[index];
+    output += char === "\n" ? "<br>" : escapeHTML(char);
+    index += 1;
+  }
+
+  return output;
 }
 
 function setText(id, value) {
@@ -1324,12 +1430,25 @@ function renderHero() {
 
 function renderProjects() {
   const section = $("#projects");
+  const channelContainer = $("#projects-channel");
   setHidden(section, DATA.projects.enabled === false);
-  if (DATA.projects.enabled === false) return;
+  if (DATA.projects.enabled === false) {
+    if (channelContainer) {
+      channelContainer.innerHTML = "";
+      setHidden(channelContainer, true);
+    }
+    return;
+  }
 
   setText("projects-eyebrow", DATA.projects.sectionEyebrow);
   setText("projects-title", DATA.projects.sectionTitle);
   setText("projects-meta", DATA.projects.sectionMeta);
+
+  if (channelContainer) {
+    const channelMarkup = renderProjectYouTubeChannelCard(DATA.projects.youtubeChannel);
+    channelContainer.innerHTML = channelMarkup;
+    setHidden(channelContainer, !channelMarkup);
+  }
 
   const grid = $("#projects-grid");
   if (!grid) return;
@@ -1482,8 +1601,7 @@ function renderWorksCategoryStack(videos, categories, works) {
       ${categories.map((category) => {
         const categoryVideos = videos
           .filter((video) => video.category === category)
-          .slice()
-          .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+          .slice();
         const categoryEntry = categoryEntryMap.get(category) || { title: "", meta: "" };
         const displayTitle = categoryEntry.title || category;
         const resolvedColumns = Number.isInteger(categoryEntry.columns)
@@ -1512,6 +1630,33 @@ function renderWorksCategoryStack(videos, categories, works) {
   `;
 }
 
+function getHybridWorksSegments(videos, categories, works) {
+  const categoryEntryMap = new Map(
+    normalizeWorksCategoryEntries(works.categoryEntries, works.videos, works.categoryOrder)
+      .map((entry) => [entry.category, entry]),
+  );
+  const stackCategorySet = new Set(
+    categories.filter((category) => categoryEntryMap.get(category)?.displayMode === "category-stack"),
+  );
+
+  return {
+    stackCategories: categories.filter((category) => stackCategorySet.has(category)),
+    gridCategories: categories.filter((category) => !stackCategorySet.has(category)),
+    stackVideos: videos.filter((video) => stackCategorySet.has(video.category)),
+    gridVideos: videos.filter((video) => !stackCategorySet.has(video.category)),
+  };
+}
+
+function placeWorksGroupsForDisplayMode(filters, groups, stackBeforeFilters) {
+  const parent = filters?.parentNode;
+  if (!parent || !groups) return;
+  if (stackBeforeFilters) {
+    if (groups.nextElementSibling !== filters) parent.insertBefore(groups, filters);
+    return;
+  }
+  if (filters.nextElementSibling !== groups) parent.insertBefore(groups, filters.nextSibling);
+}
+
 function renderWorks() {
   const section = $("#works");
   const title = $("#works-title");
@@ -1533,8 +1678,15 @@ function renderWorks() {
   const hasSectionContent = Boolean(displayTitle || sectionDescription || rawVideos.length);
   const hasShortVideos = rawVideos.some((video) => video.type === "short");
   const categories = getOrderedWorksCategories(rawVideos, works.categoryOrder);
+  const hybridSegments = displayMode === "hybrid"
+    ? getHybridWorksSegments(rawVideos, categories, works)
+    : null;
+  const filterCategories = hybridSegments ? hybridSegments.gridCategories : categories;
+  const filterVideos = hybridSegments ? hybridSegments.gridVideos : rawVideos;
+  const hasFilterShortVideos = filterVideos.some((video) => video.type === "short");
 
   section.dataset.visualPreset = visualPreset;
+  placeWorksGroupsForDisplayMode(filters, groups, displayMode === "hybrid");
 
   if (works.enabled === false) {
     setHidden(section, true);
@@ -1561,10 +1713,10 @@ function renderWorks() {
   if (!["all", "long", "short"].includes(worksFilterState.type)) {
     worksFilterState.type = "all";
   }
-  if (worksFilterState.type === "short" && !hasShortVideos) {
+  if (worksFilterState.type === "short" && !hasFilterShortVideos) {
     worksFilterState.type = "all";
   }
-  if (worksFilterState.category !== "all" && !categories.includes(worksFilterState.category)) {
+  if (worksFilterState.category !== "all" && !filterCategories.includes(worksFilterState.category)) {
     worksFilterState.category = "all";
   }
   if (displayMode === "category-stack" && works.categoryStackTypeFilterEnabled === false) {
@@ -1580,6 +1732,14 @@ function renderWorks() {
         filters.hidden = true;
         filters.innerHTML = "";
       }
+    } else if (displayMode === "hybrid") {
+      if (filterVideos.length) {
+        filters.hidden = false;
+        filters.innerHTML = renderGridWorksFilters(filterCategories, hasFilterShortVideos);
+      } else {
+        filters.hidden = true;
+        filters.innerHTML = "";
+      }
     } else {
       filters.hidden = false;
       filters.innerHTML = renderGridWorksFilters(categories, hasShortVideos);
@@ -1591,14 +1751,22 @@ function renderWorks() {
 
   const filteredByType = rawVideos
     .filter((video) => worksFilterState.type === "all" || video.type === worksFilterState.type)
-    .slice()
-    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    .slice();
 
   const visibleVideos = displayMode === "category-stack"
     ? filteredByType
     : filteredByType.filter((video) => worksFilterState.category === "all" || video.category === worksFilterState.category);
 
-  if (!visibleVideos.length) {
+  const visibleHybridGridVideos = hybridSegments
+    ? hybridSegments.gridVideos
+        .filter((video) => worksFilterState.type === "all" || video.type === worksFilterState.type)
+        .filter((video) => worksFilterState.category === "all" || video.category === worksFilterState.category)
+    : [];
+  const hasVisibleContent = displayMode === "hybrid"
+    ? Boolean(hybridSegments.stackVideos.length || visibleHybridGridVideos.length)
+    : Boolean(visibleVideos.length);
+
+  if (!hasVisibleContent) {
     grid.innerHTML = "";
     groups.innerHTML = "";
     setHidden(grid, true);
@@ -1609,6 +1777,17 @@ function renderWorks() {
   }
 
   empty.hidden = true;
+
+  if (displayMode === "hybrid") {
+    groups.innerHTML = hybridSegments.stackVideos.length
+      ? renderWorksCategoryStack(hybridSegments.stackVideos, hybridSegments.stackCategories, works)
+      : "";
+    grid.dataset.columns = String(normalizeWorksColumnCount(works.gridColumns, DEFAULT_DATA.works.gridColumns));
+    grid.innerHTML = visibleHybridGridVideos.length ? renderWorksGrid(visibleHybridGridVideos) : "";
+    setHidden(groups, !hybridSegments.stackVideos.length);
+    setHidden(grid, !visibleHybridGridVideos.length);
+    return;
+  }
 
   if (displayMode === "category-stack") {
     groups.innerHTML = renderWorksCategoryStack(visibleVideos, categories, works);
