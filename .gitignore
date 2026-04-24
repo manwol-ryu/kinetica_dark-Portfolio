@@ -2,3 +2,5 @@
 
 *.json
 !data/example.site.json
+.hermes
+scripts

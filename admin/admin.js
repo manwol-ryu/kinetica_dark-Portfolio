@@ -3,6 +3,8 @@ const exampleJsonPath = "../data/example.site.json";
 const githubJsonPath = "data/site.json";
 const indexHtmlPath = "../index.html";
 const fallbackGitHubBranch = "main";
+const detailSectionStateStorageKey = "portfolio-template-admin-detail-sections-v1";
+const editorCardStateStorageKey = "portfolio-template-admin-editor-cards-v1";
 const embedCardTabs = new Set(["embed-card", "embed-image"]);
 const socialPreviewPresets = Object.freeze([
   { id: "og-191", label: "OG 권장 1.91:1 · 1200×630", width: 1200, height: 630 },
@@ -17,6 +19,12 @@ const socialPreviewPresets = Object.freeze([
 const defaultSocialPreviewPresetId = socialPreviewPresets[0].id;
 const previewFontFamilyStyle = "font-family:'Epilogue', 'Segoe UI', 'Malgun Gothic', '맑은 고딕', Arial, sans-serif;";
 const previewTargets = {
+  quickstart: {
+    title: "퀵스타트 미리보기",
+    description: "초기 세팅 핵심값이 실제 홈, 가격, 문의 영역에 어떻게 반영되는지 한 번에 확인합니다.",
+    pathText: "index.html / pricing.html / contact.html",
+    openHref: "../index.html",
+  },
   brand: {
     title: "브랜드 / 내비 미리보기",
     description: "상단 헤더와 사이트 제목, 설명이 실제 화면에서 어떤 톤으로 보이는지 확인합니다.",
@@ -36,8 +44,8 @@ const previewTargets = {
     openHref: "../index.html#home",
   },
   projects: {
-    title: "프로젝트 미리보기",
-    description: "프로젝트 섹션 전체 카드 배치와 카피 흐름을 바로 확인합니다.",
+    title: "유튜브 채널/프로젝트 미리보기",
+    description: "프로젝트 섹션의 채널 카드와 프로젝트 카드 배치를 바로 확인합니다.",
     pathText: "index.html#projects",
     openHref: "../index.html#projects",
   },
@@ -162,6 +170,16 @@ const DEFAULT_DATA = {
     sectionEyebrow: "",
     sectionTitle: "",
     sectionMeta: "",
+    youtubeChannel: {
+      enabled: false,
+      url: "",
+      avatarUrl: "",
+      name: "",
+      handle: "",
+      subscriberText: "",
+      videoCountText: "",
+      description: "",
+    },
     cards: [],
   },
   stats: {
@@ -248,13 +266,23 @@ const DEFAULT_DATA = {
 
 const state = {
   data: clone(DEFAULT_DATA),
-  activeTab: "works",
+  activeTab: "quickstart",
+  mobileMenuOpen: false,
+  quickstartStepIndex: 0,
+  quickstartEmbedUploadDone: false,
+  quickstartEmbedIndexDone: false,
+  quickstartPlanExpanded: {},
+  detailSectionState: loadStoredState(detailSectionStateStorageKey),
+  editorCardState: loadStoredState(editorCardStateStorageKey),
   search: "",
   typeFilter: "all",
   metadataTimer: null,
   metadataRequestId: 0,
   lastMetadataVideoId: "",
   worksFormVideoId: "",
+  youtubeChannelTimer: null,
+  youtubeChannelRequestId: 0,
+  lastYouTubeChannelLookupUrl: "",
   githubDefaultBranch: fallbackGitHubBranch,
   githubDefaultBranchRepo: "",
   githubDefaultBranchSource: "fallback",
@@ -333,6 +361,13 @@ const DIRECT_BINDINGS = {
   "projects-eyebrow": ["projects", "sectionEyebrow"],
   "projects-title": ["projects", "sectionTitle"],
   "projects-meta": ["projects", "sectionMeta"],
+  "projects-youtube-channel-url": ["projects", "youtubeChannel", "url"],
+  "projects-youtube-channel-avatar": ["projects", "youtubeChannel", "avatarUrl"],
+  "projects-youtube-channel-name": ["projects", "youtubeChannel", "name"],
+  "projects-youtube-channel-handle": ["projects", "youtubeChannel", "handle"],
+  "projects-youtube-channel-subscriber": ["projects", "youtubeChannel", "subscriberText"],
+  "projects-youtube-channel-videos": ["projects", "youtubeChannel", "videoCountText"],
+  "projects-youtube-channel-description": ["projects", "youtubeChannel", "description"],
   "pricing-eyebrow": ["pricing", "sectionEyebrow"],
   "pricing-title": ["pricing", "title"],
   "pricing-description": ["pricing", "description"],
@@ -352,12 +387,124 @@ const DIRECT_BINDINGS = {
 
 const CHECKBOX_BINDINGS = {
   "projects-enabled": ["projects", "enabled"],
+  "projects-youtube-channel-enabled": ["projects", "youtubeChannel", "enabled"],
   "works-enabled": ["works", "enabled"],
   "stats-enabled": ["stats", "enabled"],
   "pricing-process-enabled": ["pricing", "processEnabled"],
   "pricing-custom-works-enabled": ["pricing", "customWorksEnabled"],
   "footer-enabled": ["site", "footer", "enabled"],
   "footer-links-enabled": ["site", "footer", "linksEnabled"],
+};
+
+const QUICKSTART_STEPS = Object.freeze([
+  {
+    id: "site",
+    title: "사이트 정보",
+    description: "사이트 제목, 설명, GitHub Repo, 브랜드명, 상단 버튼을 먼저 정리합니다.",
+    preview: "brand",
+  },
+  {
+    id: "hero",
+    title: "히어로 기본 정보",
+    description: "첫 화면의 배경 영상, 제목, 설명, 상태 문구를 확인합니다.",
+    preview: "hero",
+  },
+  {
+    id: "panels",
+    title: "경력/툴/BGM",
+    description: "히어로 하단 카드 제목과 경력 핵심 텍스트를 확인합니다.",
+    preview: "hero-panels",
+  },
+  {
+    id: "process",
+    title: "프로세스",
+    description: "진행 프로세스 표시 여부와 단계 목록을 확인합니다.",
+    preview: "stats-process",
+  },
+  {
+    id: "pricing",
+    title: "가격",
+    description: "가격 섹션 제목, 설명, 플랜 카드 구성을 확인합니다.",
+    preview: "pricing",
+  },
+  {
+    id: "contact",
+    title: "문의/푸터",
+    description: "문의 섹션과 푸터 문구가 어떻게 보이는지 확인합니다.",
+    preview: "contact-footer",
+  },
+  {
+    id: "json",
+    title: "JSON",
+    description: "완성된 site.json을 복사하기 전에 전체 요약을 확인합니다.",
+    preview: "json",
+  },
+  {
+    id: "embed-image",
+    title: "임베드 카드 미리보기",
+    description: "대표 이미지를 바로 추가하고 임베드 카드 구도를 확인합니다.",
+    preview: "embed-card",
+  },
+  {
+    id: "embed-upload",
+    title: "GitHub assets 업로드",
+    description: "다운로드한 social-preview.png를 GitHub assets 폴더에 업로드합니다.",
+    preview: "embed-upload",
+  },
+  {
+    id: "embed-card",
+    title: "임베드 카드 수정",
+    description: "카드 제목, 설명, 대표 이미지 URL과 생성된 HTML을 확인합니다.",
+    preview: "embed-card",
+  },
+  {
+    id: "embed-index",
+    title: "GitHub index.html 수정",
+    description: "GitHub에서 index.html의 OG 블록을 복사한 코드로 교체합니다.",
+    preview: "embed-index",
+  },
+  {
+    id: "done",
+    title: "완료/최종 확인",
+    description: "JSON, 임베드 코드, 공개 페이지를 마지막으로 점검합니다.",
+    preview: "json",
+  },
+]);
+
+const QUICKSTART_DIRECT_BINDINGS = {
+  "quickstart-site-title": ["site", "title"],
+  "quickstart-site-description": ["site", "description"],
+  "quickstart-site-github-repo": ["site", "githubRepo"],
+  "quickstart-brand-name": ["site", "brand", "name"],
+  "quickstart-nav-cta-label": ["site", "nav", "ctaLabel"],
+  "quickstart-nav-cta-href": ["site", "nav", "ctaHref"],
+  "quickstart-hero-video-url": ["hero", "backgroundVideoUrl"],
+  "quickstart-hero-title": ["hero", "title"],
+  "quickstart-hero-title-accent": ["hero", "titleAccent"],
+  "quickstart-hero-description": ["hero", "description"],
+  "quickstart-hero-status-label": ["hero", "statusLabel"],
+  "quickstart-hero-status-text": ["hero", "statusText"],
+  "quickstart-hero-career-title": ["hero", "infoPanels", "career", "title"],
+  "quickstart-hero-tools-title": ["hero", "infoPanels", "tools", "title"],
+  "quickstart-hero-bgm-title": ["hero", "infoPanels", "bgm", "title"],
+  "quickstart-hero-career-freeform": ["hero", "infoPanels", "career", "freeformText"],
+  "quickstart-career-freeform": ["hero", "infoPanels", "career", "freeformText"],
+  "quickstart-pricing-process-style": ["pricing", "processStyle"],
+  "quickstart-pricing-process-title": ["pricing", "processTitle"],
+  "quickstart-pricing-title": ["pricing", "title"],
+  "quickstart-pricing-description": ["pricing", "description"],
+  "quickstart-contact-title": ["contact", "title"],
+  "quickstart-contact-description": ["contact", "description"],
+  "quickstart-contact-card-label": ["contact", "primaryCard", "label"],
+  "quickstart-contact-card-value": ["contact", "primaryCard", "value"],
+  "quickstart-contact-card-href": ["contact", "primaryCard", "href"],
+  "quickstart-footer-title": ["site", "footer", "title"],
+  "quickstart-footer-copy": ["site", "footer", "copy"],
+};
+
+const QUICKSTART_CHECKBOX_BINDINGS = {
+  "quickstart-pricing-process-enabled": ["pricing", "processEnabled"],
+  "quickstart-footer-enabled": ["site", "footer", "enabled"],
 };
 
 const MATERIAL_ICON_OPTIONS = Object.freeze([
@@ -532,6 +679,24 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function loadStoredState(storageKey) {
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveStoredState(storageKey, value) {
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(value));
+  } catch (error) {
+    // Ignore storage failures so the editor remains usable in restricted contexts.
+  }
+}
+
 function escapeHTML(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -540,6 +705,26 @@ function escapeHTML(value) {
     "\"": "&quot;",
     "'": "&#39;",
   })[char]);
+}
+
+function slugifyToken(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9가-힣_-]/g, "");
+}
+
+function normalizeAccentKeywords(value) {
+  const seen = new Set();
+  return String(value || "")
+    .split(/[#,\n，]/)
+    .map((item) => item.trim())
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
 }
 
 function normalizeGitHubRepo(value) {
@@ -939,6 +1124,24 @@ function normalizeCustomWorks(items, legacyItem) {
   return hasCustomWorkContent(legacyBlock) ? [legacyBlock] : [];
 }
 
+function normalizeProjectYouTubeChannel(channel) {
+  return {
+    enabled: normalizeEnabled(channel?.enabled, DEFAULT_DATA.projects.youtubeChannel.enabled),
+    url: String(channel?.url || "").trim(),
+    avatarUrl: String(channel?.avatarUrl || "").trim(),
+    name: String(channel?.name || "").trim(),
+    handle: String(channel?.handle || "").trim(),
+    subscriberText: String(channel?.subscriberText || "").trim(),
+    videoCountText: String(channel?.videoCountText || "").trim(),
+    description: String(channel?.description || "").trim(),
+  };
+}
+
+function hasProjectYouTubeChannel(channel) {
+  const normalized = normalizeProjectYouTubeChannel(channel);
+  return normalized.enabled !== false && Boolean(normalized.url && (normalized.name || normalized.handle));
+}
+
 function isDirectVideoUrl(value) {
   const raw = String(value || "").trim();
   if (!raw) return false;
@@ -1046,6 +1249,12 @@ function chunkProcessSteps(steps) {
 }
 
 function normalizeWorksDisplayMode(value) {
+  return ["grid", "category-stack", "hybrid"].includes(String(value || "").trim())
+    ? String(value).trim()
+    : "grid";
+}
+
+function normalizeWorksCategoryDisplayMode(value) {
   return value === "category-stack" ? "category-stack" : "grid";
 }
 
@@ -1109,6 +1318,7 @@ function normalizeWorksCategoryEntries(items, videos, order) {
         category: String(item?.category || "").trim(),
         title: String(item?.title || "").trim(),
         meta: String(item?.meta || item?.description || "").trim(),
+        displayMode: normalizeWorksCategoryDisplayMode(item?.displayMode),
         columns: Number.isInteger(Number(item?.columns)) ? Number(item.columns) : null,
         singleColumnSize: ["large", "medium", "small"].includes(String(item?.singleColumnSize || "").trim())
           ? String(item.singleColumnSize).trim()
@@ -1124,6 +1334,7 @@ function normalizeWorksCategoryEntries(items, videos, order) {
       category,
       title: String(entry?.title || "").trim(),
       meta: String(entry?.meta || "").trim(),
+      displayMode: normalizeWorksCategoryDisplayMode(entry?.displayMode),
       columns: Number.isInteger(Number(entry?.columns)) && Number(entry.columns) >= 1 && Number(entry.columns) <= 8
         ? Number(entry.columns)
         : null,
@@ -1214,12 +1425,253 @@ function getWorksCategories(videos = state.data.works?.videos) {
 function getSortedWorksVideos(videos = state.data.works?.videos) {
   return (Array.isArray(videos) ? videos : [])
     .filter((video) => video.id)
-    .slice()
-    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    .slice();
 }
 
 function watchUrlFromVideoId(videoId) {
   return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+}
+
+function normalizeYouTubeChannelUrl(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return "";
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  const url = new URL(withProtocol);
+  const host = url.hostname.replace(/^www\./, "").toLowerCase();
+  if (!host.endsWith("youtube.com")) {
+    throw new Error("YouTube 채널 URL만 입력할 수 있습니다.");
+  }
+  return url.href;
+}
+
+function extractYouTubeChannelHandle(value) {
+  try {
+    const url = new URL(normalizeYouTubeChannelUrl(value));
+    const handleSegment = url.pathname.split("/").filter(Boolean).find((segment) => segment.startsWith("@"));
+    return handleSegment ? handleSegment : "";
+  } catch (error) {
+    const match = String(value || "").match(/(?:^|\/)(@[^/?#]+)/);
+    return match ? match[1] : "";
+  }
+}
+
+function extractYouTubeChannelIdFromUrl(value) {
+  const match = String(value || "").match(/\/channel\/(UC[a-zA-Z0-9_-]+)/);
+  return match ? match[1] : "";
+}
+
+function extractYouTubeChannelIdFromHtml(html) {
+  const source = String(html || "");
+  const patterns = [
+    /"channelId"\s*:\s*"(UC[^"]+)"/,
+    /"externalId"\s*:\s*"(UC[^"]+)"/,
+    /"browseId"\s*:\s*"(UC[^"]+)"/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (match) return match[1];
+  }
+  return "";
+}
+
+function cleanYouTubeChannelTitle(value) {
+  return String(value || "")
+    .replace(/\s*-\s*YouTube\s*$/i, "")
+    .trim();
+}
+
+function getYouTubeChannelDataFromHtml(html, fallbackUrl) {
+  const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+  const title = cleanYouTubeChannelTitle(
+    getMetaContent(doc, 'meta[property="og:title"]')
+      || getMetaContent(doc, 'meta[name="title"]')
+      || doc.querySelector("title")?.textContent
+      || "",
+  );
+  const image = getMetaContent(doc, 'meta[property="og:image"]');
+  const canonical = doc.querySelector('link[rel="canonical"]')?.getAttribute("href")
+    || getMetaContent(doc, 'meta[property="og:url"]')
+    || fallbackUrl;
+  const channelId = extractYouTubeChannelIdFromHtml(html) || extractYouTubeChannelIdFromUrl(canonical);
+  const handle = extractYouTubeChannelHandle(canonical) || extractYouTubeChannelHandle(fallbackUrl);
+
+  return {
+    title,
+    image,
+    url: canonical,
+    channelId,
+    handle,
+  };
+}
+
+function cleanYouTubeReaderLine(value) {
+  return String(value || "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^[#*\s]+|[*\s]+$/g, "")
+    .trim();
+}
+
+function getYouTubeChannelDataFromReaderText(text, fallbackUrl) {
+  const source = String(text || "");
+  const titleMatch = source.match(/^Title:\s*(.+)$/im)
+    || source.match(/^#\s+(.+?)(?:\s+-\s*YouTube)?\s*$/m);
+  const imageMatch = source.match(/!\[[^\]]*\]\((https?:\/\/yt3\.googleusercontent\.com\/[^)\s]+)[^)]*\)/i);
+  const handleMatch = source.match(/^(@[A-Za-z0-9._-]+)\s*$/m);
+
+  return {
+    title: cleanYouTubeChannelTitle(cleanYouTubeReaderLine(titleMatch?.[1] || "")),
+    image: imageMatch?.[1] || "",
+    url: fallbackUrl,
+    channelId: extractYouTubeChannelIdFromHtml(source) || extractYouTubeChannelIdFromUrl(fallbackUrl),
+    handle: handleMatch?.[1] || extractYouTubeChannelHandle(fallbackUrl),
+  };
+}
+
+function hasYouTubeChannelPayload(data) {
+  return Boolean(data?.title || data?.image || data?.channelId || data?.handle);
+}
+
+function getYouTubeReaderUrl(normalizedUrl) {
+  const url = new URL(normalizedUrl);
+  return `https://r.jina.ai/http://${url.host}${url.pathname}${url.search}`;
+}
+
+async function fetchTextWithTimeout(url, timeoutMs = 9000) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`응답 오류 ${response.status}`);
+    return await response.text();
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function fetchYouTubeChannelData(inputUrl) {
+  const normalizedUrl = normalizeYouTubeChannelUrl(inputUrl);
+  const encodedUrl = encodeURIComponent(normalizedUrl);
+  const attempts = [
+    async () => {
+      const html = await fetchTextWithTimeout(`https://api.allorigins.win/raw?url=${encodedUrl}`);
+      return getYouTubeChannelDataFromHtml(html, normalizedUrl);
+    },
+    async () => {
+      const payload = await fetchTextWithTimeout(`https://api.allorigins.win/get?url=${encodedUrl}`);
+      const parsed = JSON.parse(payload);
+      if (!parsed?.contents) throw new Error("보조 프록시 응답을 읽지 못했습니다.");
+      return getYouTubeChannelDataFromHtml(parsed.contents, normalizedUrl);
+    },
+    async () => {
+      const readerText = await fetchTextWithTimeout(getYouTubeReaderUrl(normalizedUrl), 11000);
+      return getYouTubeChannelDataFromReaderText(readerText, normalizedUrl);
+    },
+  ];
+  let lastError = null;
+
+  for (const attempt of attempts) {
+    try {
+      const data = await attempt();
+      if (hasYouTubeChannelPayload(data)) return data;
+      lastError = new Error("채널 정보를 찾지 못했습니다.");
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new Error(lastError?.name === "AbortError"
+    ? "조회 시간이 초과되었습니다."
+    : lastError?.message || "YouTube 채널 페이지를 불러오지 못했습니다.");
+}
+
+function getCurrentYouTubeChannelLookupUrl() {
+  try {
+    return normalizeYouTubeChannelUrl(state.data.projects.youtubeChannel.url);
+  } catch (error) {
+    return "";
+  }
+}
+
+async function lookupYouTubeChannel(inputUrl) {
+  let normalizedUrl = "";
+  try {
+    normalizedUrl = normalizeYouTubeChannelUrl(inputUrl);
+  } catch (error) {
+    setYouTubeChannelFeedback(error.message || "YouTube 채널 URL을 확인해주세요.", "error");
+    return;
+  }
+
+  if (!normalizedUrl) {
+    setYouTubeChannelFeedback("채널 URL을 입력하면 자동으로 정보를 확인합니다.");
+    return;
+  }
+
+  const requestId = state.youtubeChannelRequestId + 1;
+  state.youtubeChannelRequestId = requestId;
+  state.lastYouTubeChannelLookupUrl = normalizedUrl;
+  setYouTubeChannelFeedback("채널 정보를 불러오는 중입니다...", "loading");
+
+  try {
+    const channelData = await fetchYouTubeChannelData(normalizedUrl);
+    if (
+      requestId !== state.youtubeChannelRequestId ||
+      getCurrentYouTubeChannelLookupUrl() !== normalizedUrl
+    ) {
+      return;
+    }
+
+    const channel = state.data.projects.youtubeChannel;
+    channel.url = channelData.url || normalizedUrl;
+    if (channelData.image) channel.avatarUrl = channelData.image;
+    if (channelData.title) channel.name = channelData.title;
+    if (channelData.handle) channel.handle = channelData.handle;
+
+    renderDirectInputs();
+    renderProjectInlinePreviews();
+    applyMinorChange(channelData.channelId
+      ? `유튜브 채널 정보를 자동으로 채웠습니다. 채널 ID: ${channelData.channelId}`
+      : "유튜브 채널 정보를 자동으로 채웠습니다.");
+    setYouTubeChannelFeedback("채널 정보를 자동으로 채웠습니다.", "success");
+  } catch (error) {
+    if (requestId !== state.youtubeChannelRequestId) return;
+    const channel = state.data.projects.youtubeChannel;
+    const fallbackHandle = extractYouTubeChannelHandle(normalizedUrl);
+    if (fallbackHandle && !channel.handle && getCurrentYouTubeChannelLookupUrl() === normalizedUrl) {
+      channel.handle = fallbackHandle;
+      renderDirectInputs();
+      renderProjectInlinePreviews();
+      applyMinorChange("유튜브 채널 핸들을 URL에서 보완했습니다.");
+    }
+    setYouTubeChannelFeedback(`자동 입력 실패: ${error.message || "직접 입력해주세요."} 직접 입력해주세요.`, "error");
+  }
+}
+
+function scheduleYouTubeChannelLookup(value) {
+  window.clearTimeout(state.youtubeChannelTimer);
+  const raw = String(value || "").trim();
+  if (!raw) {
+    state.lastYouTubeChannelLookupUrl = "";
+    setYouTubeChannelFeedback("채널 URL을 입력하면 자동으로 정보를 확인합니다.");
+    renderProjectInlinePreviews();
+    return;
+  }
+
+  let normalizedUrl = "";
+  try {
+    normalizedUrl = normalizeYouTubeChannelUrl(raw);
+  } catch (error) {
+    setYouTubeChannelFeedback(error.message || "YouTube 채널 URL을 확인해주세요.", "error");
+    return;
+  }
+
+  setYouTubeChannelFeedback("입력이 멈추면 채널 정보를 자동으로 확인합니다.", "loading");
+  state.youtubeChannelTimer = window.setTimeout(() => {
+    void lookupYouTubeChannel(raw);
+  }, 700);
 }
 
 function getWorksFormCategoryValue() {
@@ -1515,6 +1967,7 @@ function normalizeData(input) {
       ...base.projects,
       ...(source.projects || {}),
       enabled: normalizeEnabled(source.projects?.enabled, base.projects.enabled),
+      youtubeChannel: normalizeProjectYouTubeChannel(source.projects?.youtubeChannel),
       cards: Array.isArray(source.projects?.cards)
         ? source.projects.cards.map((card) => ({
             layout: ["featured", "secondary", "small"].includes(card?.layout) ? card.layout : "small",
@@ -1621,6 +2074,17 @@ function setWorksUrlFeedback(message, type = "") {
   }
 }
 
+function setYouTubeChannelFeedback(message, type = "") {
+  const feedback = $("#projects-youtube-channel-feedback");
+  if (!feedback) return;
+  feedback.textContent = message;
+  if (type) {
+    feedback.dataset.state = type;
+  } else {
+    delete feedback.dataset.state;
+  }
+}
+
 function serializeData() {
   const data = clone(state.data);
   const effectiveRepo = getEffectiveGitHubRepo(data.site?.githubRepo);
@@ -1638,41 +2102,45 @@ function refreshJsonOutput() {
   if (output) output.value = buildJson();
 }
 
-function renderGitHubRepoField({ preserveInputValue = false } = {}) {
-  const input = $("#site-github-repo");
-  const note = $("#site-github-repo-note");
-  if (!input) return;
+function renderGitHubRepoField({ preserveInputValue = false, sourceId = "" } = {}) {
+  const inputs = ["site-github-repo", "quickstart-site-github-repo"]
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  if (!inputs.length) return;
 
   const rawRepo = String(state.data.site?.githubRepo || "").trim();
   const normalizedRepo = normalizeGitHubRepo(rawRepo);
   const inferredRepo = resolveGitHubRepoFromPagesLocation();
   const effectiveRepo = normalizedRepo || inferredRepo;
+  const displayValue = rawRepo || effectiveRepo || "";
+  const placeholder = effectiveRepo || "owner/repo";
 
-  if (!preserveInputValue) {
-    input.value = rawRepo || effectiveRepo || "";
-  }
-  input.placeholder = effectiveRepo || "owner/repo";
+  inputs.forEach((input) => {
+    if (!(preserveInputValue && input.id === sourceId)) {
+      input.value = displayValue;
+    }
+    input.placeholder = placeholder;
+  });
 
-  if (!note) return;
+  const notes = ["site-github-repo-note", "quickstart-site-github-repo-note"]
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  if (!notes.length) return;
 
+  let noteText = "GitHub Pages에서 열면 현재 repo를 자동으로 감지하고 기본 브랜치도 함께 확인합니다.";
   if (rawRepo && normalizedRepo) {
-    note.textContent = `직접 입력한 GitHub Repo를 사용합니다.${getGitHubDefaultBranchNote(effectiveRepo)}`;
-    return;
-  }
-
-  if (rawRepo && !normalizedRepo) {
-    note.textContent = inferredRepo
+    noteText = `직접 입력한 GitHub Repo를 사용합니다.${getGitHubDefaultBranchNote(effectiveRepo)}`;
+  } else if (rawRepo && !normalizedRepo) {
+    noteText = inferredRepo
       ? `owner/repo 형식이 아니어서 현재 GitHub Pages 주소의 ${inferredRepo}를 대신 사용합니다.${getGitHubDefaultBranchNote(inferredRepo)}`
       : "owner/repo 형식으로 입력해주세요.";
-    return;
+  } else if (inferredRepo) {
+    noteText = `현재 GitHub Pages 주소에서 ${inferredRepo}를 자동으로 감지해 사용합니다.${getGitHubDefaultBranchNote(inferredRepo)}`;
   }
 
-  if (inferredRepo) {
-    note.textContent = `현재 GitHub Pages 주소에서 ${inferredRepo}를 자동으로 감지해 사용합니다.${getGitHubDefaultBranchNote(inferredRepo)}`;
-    return;
-  }
-
-  note.textContent = "GitHub Pages에서 열면 현재 repo를 자동으로 감지하고 기본 브랜치도 함께 확인합니다.";
+  notes.forEach((note) => {
+    note.textContent = noteText;
+  });
 }
 
 function textOrFallback(value, fallback) {
@@ -2009,6 +2477,11 @@ function syncEmbedFields(meta) {
     "embed-meta-image": meta.image,
     "embed-meta-url": meta.url,
     "embed-meta-image-alt": meta.imageAlt,
+    "quickstart-embed-meta-title": meta.title,
+    "quickstart-embed-meta-description": meta.description,
+    "quickstart-embed-meta-image": meta.image,
+    "quickstart-embed-meta-url": meta.url,
+    "quickstart-embed-meta-image-alt": meta.imageAlt,
   };
   Object.entries(fields).forEach(([id, value]) => {
     const input = document.getElementById(id);
@@ -2099,19 +2572,31 @@ function syncEmbedEditorFromHTML(html, { updateTextarea = false } = {}) {
   }
 }
 
-function syncEmbedEditorFromFields() {
-  const meta = {
-    title: $("#embed-meta-title")?.value || "",
-    description: $("#embed-meta-description")?.value || "",
-    image: $("#embed-meta-image")?.value || "",
-    url: $("#embed-meta-url")?.value || "",
-    imageAlt: $("#embed-meta-image-alt")?.value || "",
+function getEmbedMetaFromFieldPrefix(prefix) {
+  return {
+    title: $(`#${prefix}-title`)?.value || "",
+    description: $(`#${prefix}-description`)?.value || "",
+    image: $(`#${prefix}-image`)?.value || "",
+    url: $(`#${prefix}-url`)?.value || "",
+    imageAlt: $(`#${prefix}-image-alt`)?.value || "",
     imageMetaEnabled: state.embedMeta.imageMetaEnabled !== false,
   };
+}
+
+function syncEmbedEditorFromFieldPrefix(prefix) {
+  const meta = getEmbedMetaFromFieldPrefix(prefix);
   const html = buildEmbedHTML(meta);
   const output = $("#embed-html-output");
   if (output) output.value = html;
   syncEmbedEditorFromHTML(html);
+}
+
+function syncEmbedEditorFromFields() {
+  syncEmbedEditorFromFieldPrefix("embed-meta");
+}
+
+function syncEmbedEditorFromQuickstartFields() {
+  syncEmbedEditorFromFieldPrefix("quickstart-embed-meta");
 }
 
 function toggleEmbedImageMeta() {
@@ -2292,11 +2777,11 @@ function syncSocialPreviewPresetUI() {
 }
 
 function updateCropPreviewCanvasSize() {
-  const previewCanvas = $("#embed-crop-preview");
-  if (!previewCanvas) return;
   const preset = getSocialPreviewPreset();
-  if (previewCanvas.width !== preset.width) previewCanvas.width = preset.width;
-  if (previewCanvas.height !== preset.height) previewCanvas.height = preset.height;
+  $$(".crop-preview-canvas").forEach((previewCanvas) => {
+    if (previewCanvas.width !== preset.width) previewCanvas.width = preset.width;
+    if (previewCanvas.height !== preset.height) previewCanvas.height = preset.height;
+  });
 }
 
 function changeSocialPreviewPreset(presetId) {
@@ -2311,10 +2796,12 @@ function changeSocialPreviewPreset(presetId) {
 }
 
 function setEmbedImageStatus(message, type = "info") {
-  const status = $("#embed-image-status");
-  if (!status) return;
-  status.textContent = message;
-  status.dataset.state = type;
+  ["#embed-image-status", "#quickstart-embed-image-status"].forEach((selector) => {
+    const status = $(selector);
+    if (!status) return;
+    status.textContent = message;
+    status.dataset.state = type;
+  });
 }
 
 function clampNumber(value, min, max) {
@@ -2459,11 +2946,10 @@ function drawCropPreviewCanvas(canvas) {
 
 function renderCropCanvases() {
   const editorCanvas = $("#embed-crop-canvas");
-  const previewCanvas = $("#embed-crop-preview");
   updateCropPreviewCanvasSize();
   syncSocialPreviewPresetUI();
   drawCropEditorCanvas(editorCanvas);
-  drawCropPreviewCanvas(previewCanvas);
+  $$(".crop-preview-canvas").forEach((previewCanvas) => drawCropPreviewCanvas(previewCanvas));
 
   const placeholder = $("#embed-crop-placeholder");
   if (placeholder) placeholder.hidden = Boolean(state.cropImage);
@@ -2612,6 +3098,18 @@ function loadCropImageFile(file) {
   loadCropImage(state.cropObjectUrl);
 }
 
+function loadCropImageFromUrlInput(inputId) {
+  const url = String($(inputId)?.value || "").trim();
+  if (!url) {
+    setEmbedImageStatus("이미지 URL을 입력해주세요.", "error");
+    return;
+  }
+  const peerInputId = inputId === "#quickstart-embed-image-url" ? "#embed-image-url" : "#quickstart-embed-image-url";
+  const peerInput = $(peerInputId);
+  if (peerInput && peerInput.value !== url) peerInput.value = url;
+  loadCropImage(url);
+}
+
 function downloadSocialPreviewPNG() {
   const canvas = $("#embed-crop-canvas");
   if (!canvas || !state.cropImage) {
@@ -2679,6 +3177,17 @@ function mountLivePreview() {
 }
 
 function previewConfigForTab(tab = state.activeTab) {
+  if (tab === "quickstart") {
+    const step = getQuickstartStep();
+    const target = getQuickstartPreviewTarget();
+    const base = previewTargets[target] || previewTargets.json;
+    return {
+      ...base,
+      title: `퀵스타트 · ${String(state.quickstartStepIndex + 1).padStart(2, "0")} ${step.title} 미리보기`,
+      description: step.description || base.description,
+    };
+  }
+
   const config = previewTargets[tab] || previewTargets.brand;
   if (tab !== "projects") return config;
 
@@ -2695,17 +3204,29 @@ function previewConfigForTab(tab = state.activeTab) {
 
 function renderPreviewAccentText(text, accent, accentClass) {
   const raw = String(text || "");
-  const marker = String(accent || "").trim();
+  const markers = normalizeAccentKeywords(accent)
+    .slice()
+    .sort((left, right) => right.length - left.length || left.localeCompare(right));
   if (!raw) return "";
-  if (!marker) return escapeWithBreaks(raw);
+  if (!markers.length) return escapeWithBreaks(raw);
 
-  const index = raw.indexOf(marker);
-  if (index === -1) return escapeWithBreaks(raw);
+  let output = "";
+  let index = 0;
 
-  const before = escapeWithBreaks(raw.slice(0, index));
-  const middle = escapeHTML(marker);
-  const after = escapeWithBreaks(raw.slice(index + marker.length));
-  return `${before}<span class="${accentClass}">${middle}</span>${after}`;
+  while (index < raw.length) {
+    const match = markers.find((marker) => raw.startsWith(marker, index));
+    if (match) {
+      output += `<span class="${accentClass}">${escapeHTML(match)}</span>`;
+      index += match.length;
+      continue;
+    }
+
+    const char = raw[index];
+    output += char === "\n" ? "<br>" : escapeHTML(char);
+    index += 1;
+  }
+
+  return output;
 }
 
 function renderPreviewNavLinks() {
@@ -3020,8 +3541,7 @@ function renderPreviewWorksCategoryStack(videos, categories, works, preset = sta
       ${categories.map((category) => {
         const categoryVideos = videos
           .filter((video) => video.category === category)
-          .slice()
-          .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+          .slice();
         const categoryEntry = categoryEntryMap.get(category) || { title: "", meta: "" };
         const displayTitle = categoryEntry.title || category;
         const resolvedColumns = Number.isInteger(categoryEntry.columns)
@@ -3051,6 +3571,42 @@ function renderPreviewWorksCategoryStack(videos, categories, works, preset = sta
           </section>
         `;
       }).join("")}
+    </div>
+  `;
+}
+
+function getHybridWorksSegments(videos, categories, works) {
+  const categoryEntryMap = new Map(
+    normalizeWorksCategoryEntries(works.categoryEntries, works.videos, works.categoryOrder)
+      .map((entry) => [entry.category, entry]),
+  );
+  const stackCategorySet = new Set(
+    categories.filter((category) => categoryEntryMap.get(category)?.displayMode === "category-stack"),
+  );
+
+  return {
+    stackCategories: categories.filter((category) => stackCategorySet.has(category)),
+    gridCategories: categories.filter((category) => !stackCategorySet.has(category)),
+    stackVideos: videos.filter((video) => stackCategorySet.has(video.category)),
+    gridVideos: videos.filter((video) => !stackCategorySet.has(video.category)),
+  };
+}
+
+function renderPreviewWorksHybrid(videos, categories, works, preset = state.data.works?.visualPreset) {
+  const segments = getHybridWorksSegments(videos, categories, works);
+  if (!segments.stackVideos.length && !segments.gridVideos.length) {
+    return `
+      <div class="rounded-2xl border border-dashed border-white/10 px-6 py-8 text-center text-sm font-medium text-[#8b8577]">
+        ${escapeHTML(textOrFallback(state.data.works.emptyText, "해당 조건의 영상이 없습니다."))}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="grid gap-10">
+      ${segments.stackVideos.length ? renderPreviewWorksCategoryStack(segments.stackVideos, segments.stackCategories, works, preset) : ""}
+      ${segments.gridVideos.length ? `<div>${renderPreviewGridWorksFilters(segments.gridCategories, segments.gridVideos.some((video) => video.type === "short"), preset)}</div>` : ""}
+      ${segments.gridVideos.length ? renderPreviewWorksGrid(segments.gridVideos, works.gridColumns, preset) : ""}
     </div>
   `;
 }
@@ -3194,6 +3750,61 @@ function renderPreviewProjectCards() {
   `).join("");
 }
 
+function renderPreviewProjectYouTubeChannelCard(options = {}) {
+  const channel = normalizeProjectYouTubeChannel(state.data.projects.youtubeChannel);
+  const hasPreviewContent = Boolean(channel.url && (channel.name || channel.handle || channel.avatarUrl));
+  if (options.ignoreEnabled) {
+    if (!hasPreviewContent) return "";
+  } else if (!hasProjectYouTubeChannel(channel)) {
+    return "";
+  }
+
+  const avatarMarkup = channel.avatarUrl
+    ? `<img class="h-20 w-20 rounded-full object-cover md:h-24 md:w-24" src="${escapeHTML(resolvePreviewAssetUrl(channel.avatarUrl))}" alt="${escapeHTML(channel.name || "유튜브 채널 프로필")}" referrerpolicy="no-referrer">`
+    : `<div class="flex h-20 w-20 items-center justify-center rounded-full bg-white/10 text-2xl font-black tracking-tight text-white md:h-24 md:w-24 md:text-3xl">${escapeHTML(String(channel.name || channel.handle || "YT").trim().replace(/^@/, "").slice(0, 2).toUpperCase() || "YT")}</div>`;
+  const metaParts = [channel.handle, channel.subscriberText, channel.videoCountText].filter(Boolean);
+
+  return `
+    <a href="${escapeHTML(channel.url)}" class="group flex flex-col gap-5 overflow-hidden rounded-[28px] border border-white/10 bg-[#111111] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.28)] transition duration-300 md:flex-row md:items-center md:gap-7 md:p-7">
+      <div class="shrink-0">${avatarMarkup}</div>
+      <div class="min-w-0 flex-1">
+        <div class="text-3xl font-black tracking-tight text-white md:text-[2.25rem]">${escapeHTML(channel.name || channel.handle)}</div>
+        ${metaParts.length ? `<div class="mt-2 text-sm font-semibold text-white/78 md:text-base">${escapeHTML(metaParts.join(" · "))}</div>` : ""}
+        ${channel.description ? `<div class="mt-4 text-sm leading-relaxed text-white/72 md:text-base">${escapeHTML(channel.description)}</div>` : ""}
+      </div>
+    </a>
+  `;
+}
+
+function renderInlinePreviewShell(title, content, emptyText) {
+  return `
+    <div class="inline-preview-label">${escapeHTML(title)}</div>
+    <div class="inline-preview-surface">
+      ${content || `<div class="inline-preview-empty">${escapeHTML(emptyText)}</div>`}
+    </div>
+  `;
+}
+
+function renderProjectInlinePreviews() {
+  const channelPreview = $("#projects-youtube-channel-preview");
+  if (channelPreview) {
+    channelPreview.innerHTML = renderInlinePreviewShell(
+      "유튜브 채널 카드 미리보기",
+      renderPreviewProjectYouTubeChannelCard({ ignoreEnabled: true }),
+      "채널 URL과 채널명을 입력하면 이곳에 카드가 표시됩니다.",
+    );
+  }
+
+  const cardsPreview = $("#projects-card-only-preview");
+  if (cardsPreview) {
+    cardsPreview.innerHTML = renderInlinePreviewShell(
+      "프로젝트 카드 미리보기",
+      `<div class="preview-project-card-grid grid grid-cols-1 gap-x-8 gap-y-12 md:grid-cols-12">${renderPreviewProjectCards()}</div>`,
+      "프로젝트 카드를 추가하면 이곳에 표시됩니다.",
+    );
+  }
+}
+
 function renderPreviewPlanCards() {
   const plans = state.data.pricing.plans.filter((plan) => plan.title || plan.price || plan.description);
   if (!plans.length) {
@@ -3315,13 +3926,14 @@ function buildHeroPreview() {
 }
 
 function buildProjectsPreview() {
-  if (state.data.projects.enabled === false) {
-    return `
-      <section class="preview-render-root bg-[#16130a] px-6 py-16 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
-        <div class="mx-auto max-w-screen-2xl">${previewHiddenBlock("프로젝트 섹션이 꺼져 있습니다. 내부 작업물 링크는 영상 포트폴리오로 이동합니다.")}</div>
-      </section>
-    `;
-  }
+  const channel = normalizeProjectYouTubeChannel(state.data.projects.youtubeChannel);
+  const channelCard = renderPreviewProjectYouTubeChannelCard();
+  const channelPreview = channel.enabled === false
+    ? previewHiddenBlock("유튜브 채널 카드가 꺼져 있습니다.")
+    : channelCard || previewHiddenBlock("유튜브 채널 카드 URL과 채널명을 입력하면 이곳에 표시됩니다.");
+  const projectCards = state.data.projects.enabled === false
+    ? previewHiddenBlock("프로젝트 섹션이 꺼져 있습니다. 내부 작업물 링크는 영상 포트폴리오로 이동합니다.")
+    : `<div id="projects" class="grid grid-cols-1 gap-x-8 gap-y-12 md:grid-cols-12">${renderPreviewProjectCards()}</div>`;
 
   return `
     <section class="preview-render-root bg-[#16130a] px-6 py-16 text-[#e9e2d2] md:px-8" style="${previewFontFamilyStyle}">
@@ -3333,9 +3945,8 @@ function buildProjectsPreview() {
           </div>
           <div class="text-xs uppercase tracking-[0.2em] text-[#cec6ad]">${escapeHTML(textOrFallback(state.data.projects.sectionMeta, "2024 COLLECTION"))}</div>
         </div>
-        <div id="projects" class="grid grid-cols-1 gap-x-8 gap-y-12 md:grid-cols-12">
-          ${renderPreviewProjectCards()}
-        </div>
+        <div class="mb-14">${channelPreview}</div>
+        ${projectCards}
       </div>
     </section>
   `;
@@ -3391,9 +4002,13 @@ function buildWorksPreview() {
     ? ""
     : displayMode === "category-stack"
       ? (works.categoryStackTypeFilterEnabled ? renderPreviewCategoryStackWorksFilters(hasShortVideos, visualPreset) : "")
+      : displayMode === "hybrid"
+        ? ""
       : renderPreviewGridWorksFilters(categories, hasShortVideos, visualPreset);
   const contentMarkup = displayMode === "category-stack"
     ? renderPreviewWorksCategoryStack(videos, categories, works, visualPreset)
+    : displayMode === "hybrid"
+      ? renderPreviewWorksHybrid(videos, categories, works, visualPreset)
     : renderPreviewWorksGrid(videos, works.gridColumns, visualPreset);
   const shellClass = visualPreset === "reference"
     ? ""
@@ -3594,8 +4209,110 @@ function buildJsonOverviewPreview() {
   `;
 }
 
+function buildQuickstartEmbedImagePreview() {
+  const preset = getSocialPreviewPreset();
+  const imageState = state.cropImage ? "이미지가 로드되어 자르기 준비가 되었습니다." : "이미지 수정 탭에서 대표 이미지를 먼저 불러오세요.";
+  return `
+    <div class="quickstart-preview-card">
+      <span class="preview-kicker">EMBED IMAGE</span>
+      <h3>대표 이미지 준비</h3>
+      <p>${escapeHTML(imageState)}</p>
+      <div class="quickstart-preview-steps">
+        <span>1. 이미지 불러오기</span>
+        <span>2. 구도 맞추기</span>
+        <span>3. ${escapeHTML(getSocialPreviewSizeText(preset))} PNG 다운로드</span>
+      </div>
+    </div>
+  `;
+}
+
+function buildQuickstartEmbedUploadPreview() {
+  const repo = getEffectiveGitHubRepo(state.data.site.githubRepo) || "owner/repo";
+  return `
+    <div class="quickstart-preview-card">
+      <span class="preview-kicker">GITHUB ASSETS</span>
+      <h3>assets/social-preview.png 업로드</h3>
+      <p><strong>${escapeHTML(repo)}</strong> 레포의 <code>assets/</code> 폴더에 <code>social-preview.png</code> 이름으로 업로드합니다.</p>
+      <div class="quickstart-preview-state ${state.quickstartEmbedUploadDone ? "is-done" : ""}">
+        ${state.quickstartEmbedUploadDone ? "업로드 완료로 표시됨" : "업로드 완료 체크 전"}
+      </div>
+    </div>
+  `;
+}
+
+function buildQuickstartEmbedCardPreview() {
+  const meta = state.embedMeta || getDefaultEmbedMeta();
+  const image = meta.imageMetaEnabled === false ? "" : trimMetaUrl(meta.image);
+  const title = normalizeMetaText(meta.title) || "카드 제목";
+  const description = normalizeMetaText(meta.description) || "카드 설명이 이곳에 표시됩니다.";
+  const domain = (() => {
+    try {
+      const url = new URL(trimMetaUrl(meta.url) || resolveCurrentSiteBaseUrl() || "https://example.com");
+      return url.hostname;
+    } catch (error) {
+      return "example.com";
+    }
+  })();
+  return `
+    <article class="embed-card-preview quickstart-embed-preview" aria-label="퀵스타트 임베드 카드 미리보기">
+      <div class="embed-preview-image-wrap">
+        ${image ? `<img src="${escapeAttribute(image)}" alt="" loading="lazy">` : `<div class="embed-preview-placeholder">대표 이미지 URL을 확인하세요.</div>`}
+      </div>
+      <div class="embed-preview-body">
+        <div class="embed-preview-domain">${escapeHTML(domain)}</div>
+        <h3>${escapeHTML(title)}</h3>
+        <p>${escapeHTML(description)}</p>
+      </div>
+    </article>
+  `;
+}
+
+function buildQuickstartEmbedIndexPreview() {
+  const code = buildEmbedHTML(state.embedMeta || getDefaultEmbedMeta());
+  return `
+    <div class="quickstart-preview-card">
+      <span class="preview-kicker">INDEX.HTML</span>
+      <h3>OG 블록 교체</h3>
+      <p><code>&lt;!-- OG START --&gt;</code>부터 <code>&lt;!-- OG END --&gt;</code>까지 아래 코드로 교체합니다.</p>
+      <pre class="quickstart-code-preview">${escapeHTML(code.slice(0, 900))}${code.length > 900 ? "\n..." : ""}</pre>
+      <div class="quickstart-preview-state ${state.quickstartEmbedIndexDone ? "is-done" : ""}">
+        ${state.quickstartEmbedIndexDone ? "index.html 수정 완료로 표시됨" : "index.html 수정 완료 체크 전"}
+      </div>
+    </div>
+  `;
+}
+
+function buildQuickstartPreviewMarkup() {
+  switch (getQuickstartPreviewTarget()) {
+    case "brand":
+      return buildBrandPreview();
+    case "hero":
+    case "hero-panels":
+      return buildHeroPreview();
+    case "stats-process":
+      return buildStatsProcessPreview();
+    case "pricing":
+      return buildPricingPreview();
+    case "contact-footer":
+      return buildContactFooterPreview();
+    case "embed-image":
+      return buildQuickstartEmbedImagePreview();
+    case "embed-upload":
+      return buildQuickstartEmbedUploadPreview();
+    case "embed-card":
+      return buildQuickstartEmbedCardPreview();
+    case "embed-index":
+      return buildQuickstartEmbedIndexPreview();
+    case "json":
+    default:
+      return buildJsonOverviewPreview();
+  }
+}
+
 function buildLivePreviewMarkup() {
   switch (state.activeTab) {
+    case "quickstart":
+      return buildQuickstartPreviewMarkup();
     case "brand":
       return buildBrandPreview();
     case "hero":
@@ -3644,8 +4361,53 @@ function setByPath(path, value) {
   target[path[path.length - 1]] = value;
 }
 
+function directBindingEntries() {
+  return Object.entries({
+    ...DIRECT_BINDINGS,
+    ...QUICKSTART_DIRECT_BINDINGS,
+  });
+}
+
+function checkboxBindingEntries() {
+  return Object.entries({
+    ...CHECKBOX_BINDINGS,
+    ...QUICKSTART_CHECKBOX_BINDINGS,
+  });
+}
+
+function pathsEqual(left, right) {
+  return Array.isArray(left) && Array.isArray(right) && left.length === right.length && left.every((key, index) => key === right[index]);
+}
+
+function syncDirectInputPeers(sourceId, path) {
+  directBindingEntries().forEach(([id, candidatePath]) => {
+    if (id === sourceId || !pathsEqual(candidatePath, path)) return;
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.value = getByPath(candidatePath);
+  });
+
+  if (pathsEqual(path, ["pricing", "processStyle"])) {
+    const value = normalizePricingProcessStyle(getByPath(path));
+    ["pricing-process-style", "quickstart-pricing-process-style"].forEach((id) => {
+      if (id === sourceId) return;
+      const input = document.getElementById(id);
+      if (input) input.value = value;
+    });
+  }
+}
+
+function syncCheckboxInputPeers(sourceId, path) {
+  checkboxBindingEntries().forEach(([id, candidatePath]) => {
+    if (id === sourceId || !pathsEqual(candidatePath, path)) return;
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.checked = Boolean(getByPath(candidatePath));
+  });
+}
+
 function renderDirectInputs() {
-  Object.entries(DIRECT_BINDINGS).forEach(([id, path]) => {
+  directBindingEntries().forEach(([id, path]) => {
     const input = document.getElementById(id);
     if (!input) return;
     input.value = getByPath(path);
@@ -3653,7 +4415,7 @@ function renderDirectInputs() {
 }
 
 function renderCheckboxInputs() {
-  Object.entries(CHECKBOX_BINDINGS).forEach(([id, path]) => {
+  checkboxBindingEntries().forEach(([id, path]) => {
     const input = document.getElementById(id);
     if (!input) return;
     input.checked = Boolean(getByPath(path));
@@ -3675,6 +4437,7 @@ function rowActions(listKey, index, deleteLabel = "삭제") {
     <div class="inline-row-actions">
       <button type="button" data-move-list="${escapeHTML(listKey)}" data-index="${index}" data-direction="-1">위로</button>
       <button type="button" data-move-list="${escapeHTML(listKey)}" data-index="${index}" data-direction="1">아래로</button>
+      <button type="button" data-copy-list="${escapeHTML(listKey)}" data-index="${index}">복사</button>
       <button class="danger-action" type="button" data-delete-list="${escapeHTML(listKey)}" data-index="${index}">${escapeHTML(deleteLabel)}</button>
     </div>
   `;
@@ -3687,6 +4450,192 @@ function moveOnlyActions(listKey, index) {
       <button type="button" data-move-list="${escapeHTML(listKey)}" data-index="${index}" data-direction="1">아래로</button>
     </div>
   `;
+}
+
+function getStoredToggleValue(map, key, fallbackValue) {
+  return typeof map[key] === "boolean" ? map[key] : fallbackValue;
+}
+
+function isDetailSectionExpanded(key, fallbackValue) {
+  return getStoredToggleValue(state.detailSectionState, key, fallbackValue);
+}
+
+function setDetailSectionExpanded(key, isExpanded) {
+  state.detailSectionState[key] = Boolean(isExpanded);
+  saveStoredState(detailSectionStateStorageKey, state.detailSectionState);
+}
+
+function isEditorCardExpanded(key, fallbackValue = false) {
+  return getStoredToggleValue(state.editorCardState, key, fallbackValue);
+}
+
+function setEditorCardExpanded(key, isExpanded) {
+  state.editorCardState[key] = Boolean(isExpanded);
+  saveStoredState(editorCardStateStorageKey, state.editorCardState);
+}
+
+function getProjectCardEditorKey(card, index) {
+  return `projects:${slugifyToken(card?.title) || slugifyToken(card?.href) || "card"}:${index}`;
+}
+
+function getPricingPlanEditorKey(plan, index) {
+  return `plans:${slugifyToken(plan?.slug) || slugifyToken(plan?.title) || "plan"}:${index}`;
+}
+
+function getWorksVideoEditorKey(video, index) {
+  return `works-videos:${slugifyToken(video?.id) || "video"}:${index}`;
+}
+
+function renderCollapsibleEditorHead({ title, summary, key, expanded, actions = "" }) {
+  return `
+    <div class="collapsible-editor-head">
+      <button type="button" class="collapsible-editor-toggle" data-toggle-editor-card="${escapeHTML(key)}" aria-expanded="${expanded ? "true" : "false"}">
+        <span class="collapsible-editor-title">
+          <span class="material-symbols-outlined collapsible-editor-toggle-icon" aria-hidden="true">expand_more</span>
+          <span>${escapeHTML(title)}</span>
+        </span>
+        ${summary ? `<span class="collapsible-editor-summary">${escapeHTML(summary)}</span>` : ""}
+      </button>
+      ${actions}
+    </div>
+  `;
+}
+
+function createDetailSectionToggleButton(title, note, key, expanded) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "detail-section-toggle";
+  button.dataset.toggleDetailSection = key;
+  button.setAttribute("aria-expanded", expanded ? "true" : "false");
+  button.innerHTML = `
+    <span class="detail-section-toggle-title">
+      <span class="material-symbols-outlined detail-section-toggle-icon" aria-hidden="true">expand_more</span>
+      <span>${escapeHTML(title || "세부 설정")}</span>
+    </span>
+    ${note ? `<span class="detail-section-toggle-note">${escapeHTML(note)}</span>` : ""}
+  `;
+  return button;
+}
+
+function applyDetailSectionExpanded(section, isExpanded) {
+  const button = section.querySelector("[data-toggle-detail-section]");
+  const body = section.querySelector(".detail-section-body");
+  section.classList.toggle("is-collapsed", !isExpanded);
+  if (button) button.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  if (body) body.hidden = !isExpanded;
+}
+
+function applyEditorCardExpanded(container, isExpanded) {
+  const button = container.querySelector("[data-toggle-editor-card]");
+  const body = container.querySelector(".collapsible-editor-body");
+  container.classList.toggle("is-collapsed", !isExpanded);
+  if (button) button.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  if (body) body.hidden = !isExpanded;
+}
+
+function shouldSkipDetailSectionToggle(section) {
+  return section?.dataset?.noDetailToggle === "true";
+}
+
+function getVisibleDetailSections(panel) {
+  return [...(panel?.querySelectorAll(":scope > .editor-card.detail-section") || [])]
+    .filter((section) => !section.hidden && !shouldSkipDetailSectionToggle(section));
+}
+
+function updateDetailSectionBulkToggle(panel) {
+  const button = panel?.querySelector("[data-detail-section-bulk-toggle]");
+  if (!button) return;
+  const sections = getVisibleDetailSections(panel);
+  const shouldOpen = sections.some((section) => section.classList.contains("is-collapsed"));
+  button.disabled = !sections.length;
+  button.textContent = shouldOpen ? "전체 열기" : "전체 닫기";
+  button.setAttribute("aria-label", shouldOpen ? "현재 탭의 모든 섹션 열기" : "현재 탭의 모든 섹션 닫기");
+}
+
+function updateAllDetailSectionBulkToggles() {
+  $$(".tab-panel").forEach((panel) => updateDetailSectionBulkToggle(panel));
+}
+
+function setPanelDetailSectionsExpanded(panel, expanded) {
+  getVisibleDetailSections(panel).forEach((section) => {
+    const detailKey = String(section.dataset.detailSectionKey || "").trim();
+    if (!detailKey) return;
+    setDetailSectionExpanded(detailKey, expanded);
+    applyDetailSectionExpanded(section, expanded);
+  });
+  updateDetailSectionBulkToggle(panel);
+}
+
+function setupDetailSectionBulkToggles() {
+  $$(".tab-panel").forEach((panel) => {
+    if (panel.dataset.bulkToggleReady === "true") return;
+    const head = panel.querySelector(":scope > .panel-head");
+    if (!head || !getVisibleDetailSections(panel).length) return;
+    const actions = document.createElement("div");
+    actions.className = "panel-head-actions";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "detail-section-bulk-toggle";
+    button.dataset.detailSectionBulkToggle = panel.dataset.panel || "";
+    actions.append(button);
+    head.append(actions);
+    panel.dataset.bulkToggleReady = "true";
+    updateDetailSectionBulkToggle(panel);
+  });
+}
+
+function setupDetailSectionCollapsibles() {
+  $$(".tab-panel").forEach((panel) => {
+    const panelKey = panel.dataset.panel || "panel";
+    const sections = [...panel.querySelectorAll(":scope > .editor-card.detail-section")]
+      .filter((section) => !shouldSkipDetailSectionToggle(section));
+
+    sections.forEach((section, index) => {
+      if (section.dataset.collapseReady === "true") return;
+
+      const headingNode = section.querySelector(":scope > h3, :scope > .section-row-head h3");
+      const title = String(headingNode?.textContent || "세부 설정").trim();
+      const sectionKey = `${panelKey}:${section.id || slugifyToken(title) || index}`;
+      const expanded = isDetailSectionExpanded(sectionKey, index === 0);
+      let firstChild = section.firstElementChild;
+      while (firstChild?.classList?.contains("detail-section-preheader")) {
+        firstChild = firstChild.nextElementSibling;
+      }
+      let headerRow = null;
+
+      if (firstChild?.classList?.contains("section-row-head")) {
+        headerRow = firstChild;
+        const contentNode = [...headerRow.children].find((child) => child.tagName === "H3" || child.querySelector?.("h3"));
+        const note = String(contentNode?.querySelector?.(".field-note")?.textContent || "").trim();
+        const actionNodes = [...headerRow.children].filter((child) => child !== contentNode);
+        const toggleButton = createDetailSectionToggleButton(title, note, sectionKey, expanded);
+        headerRow.innerHTML = "";
+        headerRow.classList.add("detail-section-toggle-row");
+        headerRow.append(toggleButton);
+        actionNodes.forEach((node) => headerRow.append(node));
+      } else {
+        let insertTarget = firstChild;
+        if (firstChild?.tagName === "H3") {
+          insertTarget = firstChild.nextSibling;
+          firstChild.remove();
+        }
+        headerRow = document.createElement("div");
+        headerRow.className = "detail-section-toggle-row";
+        headerRow.append(createDetailSectionToggleButton(title, "", sectionKey, expanded));
+        section.insertBefore(headerRow, insertTarget);
+      }
+
+      const body = document.createElement("div");
+      body.className = "detail-section-body";
+      while (headerRow.nextSibling) {
+        body.append(headerRow.nextSibling);
+      }
+      section.append(body);
+      section.dataset.collapseReady = "true";
+      section.dataset.detailSectionKey = sectionKey;
+      applyDetailSectionExpanded(section, expanded);
+    });
+  });
 }
 
 function renderNavLinkList() {
@@ -3978,19 +4927,23 @@ function renderHeroResourceEditorList(listSelector, listKey, items, emptyMessage
 }
 
 function renderHeroToolPresetButtons() {
-  const container = $("#hero-tool-presets");
-  if (!container) return;
-  container.innerHTML = Object.entries(HERO_TOOL_PRESETS).map(([key, preset]) => `
-    <button type="button" data-hero-tool-preset="${escapeHTML(key)}">${escapeHTML(preset.name)}</button>
-  `).join("");
+  ["#hero-tool-presets", "#quickstart-tool-presets"].forEach((selector) => {
+    const container = $(selector);
+    if (!container) return;
+    container.innerHTML = Object.entries(HERO_TOOL_PRESETS).map(([key, preset]) => `
+      <button type="button" data-hero-tool-preset="${escapeHTML(key)}">${escapeHTML(preset.name)}</button>
+    `).join("");
+  });
 }
 
 function renderHeroBgmPresetButtons() {
-  const container = $("#hero-bgm-presets");
-  if (!container) return;
-  container.innerHTML = Object.entries(HERO_BGM_PRESETS).map(([key, preset]) => `
-    <button type="button" data-hero-bgm-preset="${escapeHTML(key)}">${escapeHTML(preset.name)}</button>
-  `).join("");
+  ["#hero-bgm-presets", "#quickstart-bgm-presets"].forEach((selector) => {
+    const container = $(selector);
+    if (!container) return;
+    container.innerHTML = Object.entries(HERO_BGM_PRESETS).map(([key, preset]) => `
+      <button type="button" data-hero-bgm-preset="${escapeHTML(key)}">${escapeHTML(preset.name)}</button>
+    `).join("");
+  });
 }
 
 function renderHeroInfoEditors() {
@@ -4075,48 +5028,62 @@ function renderProjectCardList() {
     list.innerHTML = '<div class="empty-state">등록된 프로젝트 카드가 없습니다.</div>';
     return;
   }
-  list.innerHTML = state.data.projects.cards.map((card, index) => `
-    <article class="editor-row" data-project-index="${index}">
-      <div class="section-row-head">
-        <h3>카드 ${index + 1}</h3>
-        ${rowActions("projects", index)}
-      </div>
-      <div class="form-grid">
-        <label class="field">
-          <span>레이아웃</span>
-          <select data-project-field="layout">
-            <option value="featured" ${card.layout === "featured" ? "selected" : ""}>featured</option>
-            <option value="secondary" ${card.layout === "secondary" ? "selected" : ""}>secondary</option>
-            <option value="small" ${card.layout === "small" ? "selected" : ""}>small</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>태그</span>
-          <input type="text" value="${escapeHTML(card.tag)}" data-project-field="tag">
-        </label>
-        <label class="field">
-          <span>길이</span>
-          <input type="text" value="${escapeHTML(card.duration)}" data-project-field="duration">
-        </label>
-        <label class="field">
-          <span>제목</span>
-          <input type="text" value="${escapeHTML(card.title)}" data-project-field="title">
-        </label>
-        <label class="field span-2">
-          <span>설명</span>
-          <textarea rows="4" data-project-field="description">${escapeHTML(card.description)}</textarea>
-        </label>
-        <label class="field">
-          <span>CTA 라벨</span>
-          <input type="text" value="${escapeHTML(card.ctaLabel)}" data-project-field="ctaLabel">
-        </label>
-        <label class="field">
-          <span>CTA 링크</span>
-          <input type="text" value="${escapeHTML(card.href)}" data-project-field="href">
-        </label>
-      </div>
-    </article>
-  `).join("");
+  list.innerHTML = state.data.projects.cards.map((card, index) => {
+    const cardKey = getProjectCardEditorKey(card, index);
+    const expanded = isEditorCardExpanded(cardKey, false);
+    const summaryParts = [
+      card.layout ? `배치 ${card.layout}` : "",
+      card.title || card.tag || card.duration || "프로젝트 제목 미입력",
+    ].filter(Boolean);
+
+    return `
+      <article class="editor-row collapsible-editor ${expanded ? "" : "is-collapsed"}" data-project-index="${index}" data-editor-card-key="${escapeHTML(cardKey)}">
+        ${renderCollapsibleEditorHead({
+          title: `카드 ${index + 1}`,
+          summary: summaryParts.join(" · "),
+          key: cardKey,
+          expanded,
+          actions: rowActions("projects", index),
+        })}
+        <div class="collapsible-editor-body" ${expanded ? "" : "hidden"}>
+          <div class="form-grid">
+            <label class="field">
+              <span>배치 형식</span>
+              <select data-project-field="layout">
+                <option value="featured" ${card.layout === "featured" ? "selected" : ""}>featured</option>
+                <option value="secondary" ${card.layout === "secondary" ? "selected" : ""}>secondary</option>
+                <option value="small" ${card.layout === "small" ? "selected" : ""}>small</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>태그</span>
+              <input type="text" value="${escapeHTML(card.tag)}" data-project-field="tag">
+            </label>
+            <label class="field">
+              <span>길이</span>
+              <input type="text" value="${escapeHTML(card.duration)}" data-project-field="duration">
+            </label>
+            <label class="field">
+              <span>제목</span>
+              <input type="text" value="${escapeHTML(card.title)}" data-project-field="title">
+            </label>
+            <label class="field span-2">
+              <span>설명</span>
+              <textarea rows="4" data-project-field="description">${escapeHTML(card.description)}</textarea>
+            </label>
+            <label class="field">
+              <span>버튼 문구</span>
+              <input type="text" value="${escapeHTML(card.ctaLabel)}" data-project-field="ctaLabel">
+            </label>
+            <label class="field">
+              <span>버튼 링크</span>
+              <input type="text" value="${escapeHTML(card.href)}" data-project-field="href">
+            </label>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
 }
 
 function renderWorksVideoList() {
@@ -4135,8 +5102,7 @@ function renderWorksVideoList() {
     .filter(({ video }) => {
       if (!keyword) return true;
       return [video.title, video.category, video.id].some((value) => String(value || "").toLowerCase().includes(keyword));
-    })
-    .sort((a, b) => String(b.video.date || "").localeCompare(String(a.video.date || "")));
+    });
 
   if (!filtered.length) {
     list.innerHTML = '<div class="empty-state">표시할 영상이 없습니다.</div>';
@@ -4146,8 +5112,20 @@ function renderWorksVideoList() {
   list.innerHTML = filtered.map(({ video, index }) => {
     const selectedCategory = video.category && categories.includes(video.category) ? video.category : "__new__";
     const customCategory = selectedCategory === "__new__" ? video.category : "";
+    const summaryParts = [
+      video.type === "short" ? "숏폼" : "롱폼",
+      video.category || "카테고리 미입력",
+      formatDisplayDate(video.date) || "날짜 미입력",
+    ].filter(Boolean);
     return `
       <article class="video-card" data-works-video-index="${index}">
+        <div class="video-card-head">
+          <div>
+            <strong>${escapeHTML(video.title || `영상 ${index + 1}`)}</strong>
+            <span>${escapeHTML(summaryParts.join(" · "))}</span>
+          </div>
+          ${rowActions("works-videos", index)}
+        </div>
         <a class="video-thumb" href="${escapeHTML(videoHref(video))}" target="_blank" rel="noopener">
           <img src="${videoThumb(video.id)}" alt="" loading="lazy" referrerpolicy="no-referrer">
           <span class="type-badge type-${escapeHTML(video.type)}">${escapeHTML(video.type === "short" ? "숏폼" : "롱폼")}</span>
@@ -4187,7 +5165,6 @@ function renderWorksVideoList() {
           </label>
           <div class="video-card-footer">
             <span class="category-chip">${escapeHTML(video.category || "카테고리 미입력")}</span>
-            <button class="danger-action" type="button" data-delete-works-video="${index}">삭제</button>
           </div>
         </div>
       </article>
@@ -4228,6 +5205,8 @@ function renderWorksDisplaySettings() {
   const gridColumnsInput = $("#works-grid-columns");
   const stackColumnsInput = $("#works-category-stack-columns");
   const stackFilterInput = $("#works-category-stack-type-filter-enabled");
+  const stackFilterField = $("#works-category-stack-filter-field");
+  const stackFilterNote = $("#works-category-stack-filter-note");
   const singleSizeInput = $("#works-category-stack-single-column-size");
   const isSingleColumn = normalizeWorksColumnCount(works.categoryStackColumns, DEFAULT_DATA.works.categoryStackColumns) === 1;
 
@@ -4239,25 +5218,32 @@ function renderWorksDisplaySettings() {
   if (singleSizeInput) singleSizeInput.value = normalizeWorksSingleColumnSize(works.categoryStackSingleColumnSize);
 
   if (gridGroup) {
-    gridGroup.hidden = displayMode !== "grid";
-    gridGroup.classList.toggle("is-active", displayMode === "grid");
+    gridGroup.hidden = displayMode === "category-stack";
+    gridGroup.classList.toggle("is-active", displayMode === "grid" || displayMode === "hybrid");
   }
   if (stackGroup) {
-    stackGroup.hidden = displayMode !== "category-stack";
-    stackGroup.classList.toggle("is-active", displayMode === "category-stack");
+    stackGroup.hidden = displayMode === "grid";
+    stackGroup.classList.toggle("is-active", displayMode === "category-stack" || displayMode === "hybrid");
   }
   if (categoryOrderSection) {
-    categoryOrderSection.hidden = displayMode !== "category-stack";
-    categoryOrderSection.classList.toggle("is-active", displayMode === "category-stack");
+    categoryOrderSection.hidden = displayMode === "grid";
+    categoryOrderSection.classList.toggle("is-active", displayMode === "category-stack" || displayMode === "hybrid");
   }
   if (singleSizeField) {
-    singleSizeField.hidden = displayMode !== "category-stack" || !isSingleColumn;
+    singleSizeField.hidden = displayMode === "grid" || !isSingleColumn;
+  }
+  if (stackFilterField) {
+    stackFilterField.hidden = displayMode !== "category-stack";
+  }
+  if (stackFilterNote) {
+    stackFilterNote.hidden = displayMode !== "category-stack";
   }
 }
 
 function renderWorksCategoryOrderList() {
   const list = $("#works-category-order-list");
   if (!list) return;
+  const displayMode = normalizeWorksDisplayMode(state.data.works.displayMode);
 
   const entries = normalizeWorksCategoryEntries(
     state.data.works.categoryEntries,
@@ -4296,6 +5282,13 @@ function renderWorksCategoryOrderList() {
         <label class="field span-2">
           <span>보조 정보</span>
           <textarea rows="3" data-works-category-entry-field="meta" placeholder="예: 2024. 08. 30. ~ 2024. 10. 04.&#10;메인 편집자 / 외주 편집자">${escapeHTML(entry.meta)}</textarea>
+        </label>
+        <label class="field" ${displayMode !== "hybrid" ? "hidden" : ""}>
+          <span>하이브리드 표시 방식</span>
+          <select data-works-category-entry-field="displayMode">
+            <option value="grid" ${entry.displayMode !== "category-stack" ? "selected" : ""}>기본 그리드</option>
+            <option value="category-stack" ${entry.displayMode === "category-stack" ? "selected" : ""}>카테고리별 세로 스택</option>
+          </select>
         </label>
         <label class="field">
           <span>카테고리별 한 줄 개수</span>
@@ -4385,87 +5378,102 @@ function renderPricingPlanList() {
     list.innerHTML = '<div class="empty-state">등록된 가격 플랜이 없습니다.</div>';
     return;
   }
-  list.innerHTML = state.data.pricing.plans.map((plan, index) => `
-    <article class="plan-card" data-plan-index="${index}">
-      <div class="plan-card-head">
-        <strong>${escapeWithBreaks(plan.title || `플랜 ${index + 1}`)}</strong>
-        ${rowActions("plans", index)}
-      </div>
+  list.innerHTML = state.data.pricing.plans.map((plan, index) => {
+    const cardKey = getPricingPlanEditorKey(plan, index);
+    const expanded = isEditorCardExpanded(cardKey, false);
+    const summaryParts = [
+      plan.price || "가격 미입력",
+      normalizePricingPlanDesign(plan.design, "shortform") === "longform" ? "강조 카드" : "기본 카드",
+      plan.title || `플랜 ${index + 1}`,
+    ].filter(Boolean);
 
-      <div class="form-grid">
-        <label class="field">
-          <span>Slug</span>
-          <input type="text" value="${escapeHTML(plan.slug)}" data-plan-field="slug">
-        </label>
-        <label class="field">
-          <span>배지</span>
-          <input type="text" value="${escapeHTML(plan.badge)}" data-plan-field="badge">
-        </label>
-        <label class="field">
-          <span>가격</span>
-          <input type="text" value="${escapeHTML(plan.price)}" data-plan-field="price">
-        </label>
-        <label class="field">
-          <span>카드 디자인</span>
-          <select data-plan-field="design">
-            <option value="shortform" ${normalizePricingPlanDesign(plan.design, "shortform") === "shortform" ? "selected" : ""}>기본</option>
-            <option value="longform" ${normalizePricingPlanDesign(plan.design, "shortform") === "longform" ? "selected" : ""}>강조</option>
-          </select>
-        </label>
-        <div class="field span-2">
-          <span>아이콘 선택</span>
-          ${renderIconPickerMarkup(plan.icon, {
-            scope: "plan",
-            planIndex: index,
-            emptyLabel: "아이콘 없음",
-            helperText: "플랜 카드 상단에 노출할 아이콘을 직접 선택할 수 있습니다.",
-          })}
+    return `
+      <article class="plan-card collapsible-editor ${expanded ? "" : "is-collapsed"}" data-plan-index="${index}" data-editor-card-key="${escapeHTML(cardKey)}">
+        ${renderCollapsibleEditorHead({
+          title: plan.title || `플랜 ${index + 1}`,
+          summary: summaryParts.join(" · "),
+          key: cardKey,
+          expanded,
+          actions: rowActions("plans", index),
+        })}
+
+        <div class="collapsible-editor-body" ${expanded ? "" : "hidden"}>
+          <div class="form-grid">
+            <label class="field">
+              <span>Slug</span>
+              <input type="text" value="${escapeHTML(plan.slug)}" data-plan-field="slug">
+            </label>
+            <label class="field">
+              <span>배지</span>
+              <input type="text" value="${escapeHTML(plan.badge)}" data-plan-field="badge">
+            </label>
+            <label class="field">
+              <span>가격</span>
+              <input type="text" value="${escapeHTML(plan.price)}" data-plan-field="price">
+            </label>
+            <label class="field">
+              <span>디자인 형식</span>
+              <select data-plan-field="design">
+                <option value="shortform" ${normalizePricingPlanDesign(plan.design, "shortform") === "shortform" ? "selected" : ""}>기본</option>
+                <option value="longform" ${normalizePricingPlanDesign(plan.design, "shortform") === "longform" ? "selected" : ""}>강조</option>
+              </select>
+            </label>
+            <div class="field span-2">
+              <span>아이콘 선택</span>
+              ${renderIconPickerMarkup(plan.icon, {
+                scope: "plan",
+                planIndex: index,
+                emptyLabel: "아이콘 없음",
+                helperText: "플랜 카드 상단에 노출할 아이콘을 직접 선택할 수 있습니다.",
+              })}
+            </div>
+            <label class="field span-2">
+              <span>제목</span>
+              <textarea rows="2" data-plan-field="title">${escapeHTML(plan.title)}</textarea>
+            </label>
+            <label class="field span-2">
+              <span>설명</span>
+              <textarea rows="3" data-plan-field="description">${escapeHTML(plan.description)}</textarea>
+            </label>
+            <label class="field">
+              <span>가격 단위</span>
+              <input type="text" value="${escapeHTML(plan.priceUnit)}" data-plan-field="priceUnit">
+            </label>
+            <label class="field">
+              <span>버튼 문구</span>
+              <input type="text" value="${escapeHTML(plan.cta.label)}" data-plan-cta-field="label">
+            </label>
+            <label class="field span-2">
+              <span>버튼 링크</span>
+              <input type="text" value="${escapeHTML(plan.cta.href)}" data-plan-cta-field="href">
+            </label>
+          </div>
+
+          <div class="section-row-head">
+            <h3>포함 항목</h3>
+            <button type="button" data-add-feature="${index}">항목 추가</button>
+          </div>
+          <div class="feature-list">
+            ${(plan.features || []).length
+              ? plan.features.map((feature, featureIndex) => `
+                  <div class="feature-row" data-feature-index="${featureIndex}">
+                    <label class="field">
+                      <span>항목</span>
+                      <input type="text" value="${escapeHTML(feature)}" data-plan-feature-field="value">
+                    </label>
+                    <div class="inline-row-actions">
+                      <button type="button" data-move-feature="${featureIndex}" data-direction="-1">위로</button>
+                      <button type="button" data-move-feature="${featureIndex}" data-direction="1">아래로</button>
+                      <button class="danger-action" type="button" data-delete-feature="${featureIndex}">삭제</button>
+                    </div>
+                  </div>
+                `).join("")
+              : '<div class="empty-state slim">등록된 포함 항목이 없습니다.</div>'}
+          </div>
         </div>
-        <label class="field span-2">
-          <span>제목</span>
-          <textarea rows="2" data-plan-field="title">${escapeHTML(plan.title)}</textarea>
-        </label>
-        <label class="field span-2">
-          <span>설명</span>
-          <textarea rows="3" data-plan-field="description">${escapeHTML(plan.description)}</textarea>
-        </label>
-        <label class="field">
-          <span>가격 단위</span>
-          <input type="text" value="${escapeHTML(plan.priceUnit)}" data-plan-field="priceUnit">
-        </label>
-        <label class="field">
-          <span>CTA 라벨</span>
-          <input type="text" value="${escapeHTML(plan.cta.label)}" data-plan-cta-field="label">
-        </label>
-        <label class="field span-2">
-          <span>CTA 링크</span>
-          <input type="text" value="${escapeHTML(plan.cta.href)}" data-plan-cta-field="href">
-        </label>
-      </div>
-
-      <div class="section-row-head">
-        <h3>포함 항목</h3>
-        <button type="button" data-add-feature="${index}">항목 추가</button>
-      </div>
-      <div class="feature-list">
-        ${(plan.features || []).length
-          ? plan.features.map((feature, featureIndex) => `
-              <div class="feature-row" data-feature-index="${featureIndex}">
-                <label class="field">
-                  <span>항목</span>
-                  <input type="text" value="${escapeHTML(feature)}" data-plan-feature-field="value">
-                </label>
-                <div class="inline-row-actions">
-                  <button type="button" data-move-feature="${featureIndex}" data-direction="-1">위로</button>
-                  <button type="button" data-move-feature="${featureIndex}" data-direction="1">아래로</button>
-                  <button class="danger-action" type="button" data-delete-feature="${featureIndex}">삭제</button>
-                </div>
-              </div>
-            `).join("")
-          : '<div class="empty-state slim">등록된 포함 항목이 없습니다.</div>'}
-      </div>
-    </article>
-  `).join("");
+      </article>
+    `;
+  }).join("");
 }
 
 function renderCustomWorkList() {
@@ -4598,6 +5606,345 @@ function renderPricingSettings() {
   }
 }
 
+function getQuickstartStepIndex(stepId) {
+  const index = QUICKSTART_STEPS.findIndex((step) => step.id === stepId);
+  return index === -1 ? 0 : index;
+}
+
+function getQuickstartStep(index = state.quickstartStepIndex) {
+  const normalizedIndex = Math.min(Math.max(Number(index) || 0, 0), QUICKSTART_STEPS.length - 1);
+  return QUICKSTART_STEPS[normalizedIndex] || QUICKSTART_STEPS[0];
+}
+
+function getQuickstartPreviewTarget() {
+  return getQuickstartStep().preview || "json";
+}
+
+function setQuickstartStep(indexOrId) {
+  const nextIndex = typeof indexOrId === "string"
+    ? getQuickstartStepIndex(indexOrId)
+    : Math.min(Math.max(Number(indexOrId) || 0, 0), QUICKSTART_STEPS.length - 1);
+  state.quickstartStepIndex = nextIndex;
+  const step = getQuickstartStep();
+  if (["embed-card", "embed-index"].includes(step.id) && !state.embedLoaded) {
+    void loadEmbedHTMLFromIndex();
+  }
+  renderQuickstartWizard();
+  renderLivePreview();
+}
+
+function goQuickstartStep(direction) {
+  const nextIndex = state.quickstartStepIndex + Number(direction || 0);
+  setQuickstartStep(nextIndex);
+}
+
+function renderQuickstartStepDots() {
+  const container = $("#quickstart-step-dots");
+  if (!container) return;
+  container.innerHTML = QUICKSTART_STEPS.map((step, index) => `
+    <button
+      type="button"
+      class="quickstart-step-dot ${index === state.quickstartStepIndex ? "is-active" : ""}"
+      data-quickstart-step-target="${escapeHTML(step.id)}"
+      aria-label="${index + 1}단계 ${escapeHTML(step.title)}로 이동"
+      aria-current="${index === state.quickstartStepIndex ? "step" : "false"}"
+    >${String(index + 1).padStart(2, "0")}</button>
+  `).join("");
+}
+
+function renderQuickstartWizard() {
+  const step = getQuickstartStep();
+  $$("[data-quickstart-step]").forEach((panel) => {
+    const isActive = panel.dataset.quickstartStep === step.id;
+    panel.classList.toggle("is-active", isActive);
+    panel.hidden = !isActive;
+  });
+
+  const counter = $("#quickstart-current-step");
+  const title = $("#quickstart-current-title");
+  const description = $("#quickstart-current-description");
+  if (counter) counter.textContent = `${String(state.quickstartStepIndex + 1).padStart(2, "0")} / ${QUICKSTART_STEPS.length}`;
+  if (title) title.textContent = step.title;
+  if (description) description.textContent = step.description;
+
+  const prev = $("#quickstart-prev");
+  const next = $("#quickstart-next");
+  const uploadDone = $("#quickstart-embed-upload-done");
+  const indexDone = $("#quickstart-embed-index-done");
+  if (prev) prev.disabled = state.quickstartStepIndex === 0;
+  if (next) next.textContent = state.quickstartStepIndex === QUICKSTART_STEPS.length - 1 ? "완료" : "다음";
+  if (uploadDone) uploadDone.checked = Boolean(state.quickstartEmbedUploadDone);
+  if (indexDone) indexDone.checked = Boolean(state.quickstartEmbedIndexDone);
+  syncQuickstartProcessSettingsVisibility();
+  renderQuickstartStepDots();
+}
+
+function renderQuickstartFinishSummary() {
+  const container = $("#quickstart-finish-summary");
+  if (!container) return;
+  const repo = getEffectiveGitHubRepo(state.data.site.githubRepo) || "Repo 미설정";
+  container.innerHTML = `
+    <article><span>GitHub Repo</span><strong>${escapeHTML(repo)}</strong></article>
+    <article><span>가격 플랜</span><strong>${state.data.pricing.plans.length}개</strong></article>
+    <article><span>임베드 업로드</span><strong>${state.quickstartEmbedUploadDone ? "완료" : "확인 필요"}</strong></article>
+  `;
+}
+
+async function openQuickstartGitHubIndexEditor() {
+  await openGitHubRepoPath("index.html", "edit");
+}
+
+function getTabLabel(tab = state.activeTab) {
+  const button = document.querySelector(`.tab-button[data-tab="${tab}"]`);
+  return String(button?.textContent || "편집 메뉴").trim();
+}
+
+function syncQuickstartMobileMenu() {
+  const sidebar = $(".admin-sidebar");
+  const toggle = $("#mobile-tab-toggle");
+  const current = $("#mobile-tab-current");
+  if (current) current.textContent = getTabLabel();
+  if (sidebar) sidebar.classList.toggle("is-menu-open", state.mobileMenuOpen);
+  if (toggle) toggle.setAttribute("aria-expanded", state.mobileMenuOpen ? "true" : "false");
+}
+
+function setMobileTabMenuOpen(isOpen) {
+  state.mobileMenuOpen = Boolean(isOpen);
+  syncQuickstartMobileMenu();
+}
+
+function renderQuickstartResourceSummary() {
+  const container = $("#quickstart-resource-summary");
+  if (!container) return;
+  const tools = state.data.hero.infoPanels.tools.items.length;
+  const bgm = state.data.hero.infoPanels.bgm.items.length;
+  const mode = state.data.hero.infoPanels.career.mode || "freeform";
+  container.innerHTML = `
+    <article><span>경력 공개 형식</span><strong>${escapeHTML(mode)}</strong></article>
+    <article><span>툴 목록</span><strong>${tools}개</strong></article>
+    <article><span>BGM 목록</span><strong>${bgm}개</strong></article>
+  `;
+}
+
+function renderQuickstartCareerStructuredList() {
+  const list = $("#quickstart-career-structured-list");
+  if (!list) return;
+  const items = state.data.hero.infoPanels?.career?.structuredItems || [];
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state slim">등록된 구조형 경력이 없습니다. 경력 추가 버튼으로 시작하세요.</div>';
+    return;
+  }
+
+  list.innerHTML = items.map((item, index) => `
+    <article class="quickstart-compact-row" data-quickstart-career-structured-index="${index}">
+      <div class="quickstart-compact-title">
+        <strong>${escapeHTML(item.title || `경력 ${index + 1}`)}</strong>
+        ${rowActions("quickstart-career-structured", index)}
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>제목</span>
+          <input type="text" value="${escapeHTML(item.title)}" data-quickstart-career-structured-field="title">
+        </label>
+        <label class="field">
+          <span>기간</span>
+          <input type="text" value="${escapeHTML(item.period)}" data-quickstart-career-structured-field="period" placeholder="2024.01 - 2025.03">
+        </label>
+        <label class="field span-2">
+          <span>설명</span>
+          <textarea rows="3" data-quickstart-career-structured-field="description">${escapeHTML(item.description)}</textarea>
+        </label>
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderQuickstartHeroResourceList(listSelector, listKey, items, emptyMessage) {
+  const list = $(listSelector);
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state slim">${escapeHTML(emptyMessage)}</div>`;
+    return;
+  }
+
+  list.innerHTML = items.map((item, index) => `
+    <article class="quickstart-compact-row hero-logo-row" data-${listKey}-index="${index}">
+      <div class="quickstart-compact-title">
+        <strong>${escapeHTML(item.name || `항목 ${index + 1}`)}</strong>
+        ${rowActions(listKey, index)}
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>이름</span>
+          <input type="text" value="${escapeHTML(item.name)}" data-${listKey}-field="name">
+        </label>
+        <label class="field">
+          <span>로고 URL</span>
+          <input type="text" value="${escapeHTML(item.logoUrl)}" data-${listKey}-field="logoUrl" placeholder="assets/tool-presets/premiere-pro.svg">
+        </label>
+        <label class="field span-2">
+          <span>이미지 설명</span>
+          <input type="text" value="${escapeHTML(item.logoAlt)}" data-${listKey}-field="logoAlt" placeholder="logo alt text">
+        </label>
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderQuickstartHeroContentEditors() {
+  const careerMode = $("#quickstart-career-mode");
+  if (careerMode) careerMode.value = normalizeHeroCareerMode(state.data.hero.infoPanels?.career?.mode);
+  const careerFreeform = $("#quickstart-career-freeform");
+  if (careerFreeform && careerFreeform !== document.activeElement) {
+    careerFreeform.value = state.data.hero.infoPanels?.career?.freeformText || "";
+  }
+  renderQuickstartCareerStructuredList();
+  renderQuickstartHeroResourceList(
+    "#quickstart-tools-list",
+    "quickstart-tools",
+    state.data.hero.infoPanels?.tools?.items || [],
+    "등록된 사용 가능한 툴이 없습니다. 툴 추가 버튼으로 시작하세요.",
+  );
+  renderQuickstartHeroResourceList(
+    "#quickstart-bgm-list",
+    "quickstart-bgm",
+    state.data.hero.infoPanels?.bgm?.items || [],
+    "등록된 BGM 사용 툴이 없습니다. BGM 툴 추가 버튼으로 시작하세요.",
+  );
+}
+
+function syncQuickstartProcessSettingsVisibility() {
+  const block = $("#quickstart-process-settings");
+  if (!block) return;
+  const enabled = state.data.pricing.processEnabled !== false;
+  block.hidden = !enabled;
+  block.classList.toggle("is-active", enabled);
+}
+
+function renderQuickstartProcessStepList() {
+  const list = $("#quickstart-process-step-list");
+  if (!list) return;
+  const steps = state.data.pricing.processSteps;
+  if (!steps.length) {
+    list.innerHTML = '<div class="empty-state slim">등록된 프로세스 단계가 없습니다.</div>';
+    return;
+  }
+
+  list.innerHTML = steps.map((step, index) => `
+    <article class="quickstart-compact-row" data-quickstart-process-index="${index}">
+      <div class="quickstart-compact-title">
+        <strong>단계 ${index + 1}</strong>
+        ${rowActions("process", index)}
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>번호</span>
+          <input type="text" value="${escapeHTML(step.number)}" data-quickstart-process-field="number">
+        </label>
+        <label class="field">
+          <span>제목</span>
+          <input type="text" value="${escapeHTML(step.title)}" data-quickstart-process-field="title">
+        </label>
+        <label class="field span-2">
+          <span>설명</span>
+          <textarea rows="3" data-quickstart-process-field="description">${escapeHTML(step.description)}</textarea>
+        </label>
+      </div>
+    </article>
+  `).join("");
+}
+
+function getQuickstartPlanEditorKey(plan, index) {
+  return `quickstart:${getPricingPlanEditorKey(plan, index)}`;
+}
+
+function isQuickstartPlanExpanded(plan, index) {
+  return isEditorCardExpanded(getQuickstartPlanEditorKey(plan, index), index === 0);
+}
+
+function toggleQuickstartPlan(index) {
+  const plan = state.data.pricing.plans[index];
+  if (!plan) return;
+  const key = getQuickstartPlanEditorKey(plan, index);
+  setEditorCardExpanded(key, !isQuickstartPlanExpanded(plan, index));
+  renderQuickstartPricingPlanList();
+}
+
+function renderQuickstartPricingPlanList() {
+  const list = $("#quickstart-pricing-plan-list");
+  if (!list) return;
+  const plans = state.data.pricing.plans;
+  if (!plans.length) {
+    list.innerHTML = '<div class="empty-state slim">등록된 가격 플랜이 없습니다.</div>';
+    return;
+  }
+
+  list.innerHTML = plans.map((plan, index) => {
+    const cardKey = getQuickstartPlanEditorKey(plan, index);
+    const expanded = isQuickstartPlanExpanded(plan, index);
+    const summary = [
+      [plan.price, plan.priceUnit].filter(Boolean).join(" "),
+      plan.description || "설명 미입력",
+    ].filter(Boolean).join(" · ") || "가격 미입력";
+
+    return `
+      <article class="plan-card collapsible-editor quickstart-plan-card ${expanded ? "" : "is-collapsed"}" data-quickstart-plan-index="${index}" data-editor-card-key="${escapeHTML(cardKey)}">
+        ${renderCollapsibleEditorHead({
+          title: plan.title || `플랜 ${index + 1}`,
+          summary,
+          key: cardKey,
+          expanded,
+          actions: rowActions("plans", index),
+        })}
+
+        <div class="collapsible-editor-body quickstart-plan-body" ${expanded ? "" : "hidden"}>
+          <div class="form-grid">
+            <label class="field span-2">
+              <span>제목</span>
+              <input type="text" value="${escapeHTML(plan.title)}" data-quickstart-plan-field="title">
+            </label>
+            <label class="field">
+              <span>가격</span>
+              <input type="text" value="${escapeHTML(plan.price)}" data-quickstart-plan-field="price">
+            </label>
+            <label class="field">
+              <span>가격 단위</span>
+              <input type="text" value="${escapeHTML(plan.priceUnit)}" data-quickstart-plan-field="priceUnit">
+            </label>
+            <label class="field span-2">
+              <span>설명</span>
+              <textarea rows="3" data-quickstart-plan-field="description">${escapeHTML(plan.description)}</textarea>
+            </label>
+            <label class="field">
+              <span>버튼 문구</span>
+              <input type="text" value="${escapeHTML(plan.cta?.label || "")}" data-quickstart-plan-cta-field="label">
+            </label>
+            <label class="field">
+              <span>버튼 링크</span>
+              <input type="text" value="${escapeHTML(plan.cta?.href || "")}" data-quickstart-plan-cta-field="href">
+            </label>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function jumpToAdminSection(button) {
+  const tab = String(button?.dataset?.jumpTab || "").trim();
+  const targetId = String(button?.dataset?.jumpTarget || "").trim();
+  if (!tab) return;
+  switchTab(tab);
+  window.requestAnimationFrame(() => {
+    const target = targetId ? document.getElementById(targetId) : null;
+    const fallback = document.querySelector(`.tab-panel[data-panel="${tab}"]`);
+    (target || fallback)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (target && typeof target.focus === "function") {
+      target.focus({ preventScroll: true });
+    }
+  });
+}
+
 function renderAll() {
   syncWorksCategoryOrderState();
   renderDirectInputs();
@@ -4611,7 +5958,9 @@ function renderAll() {
   renderNavTestSession();
   renderHeroActionList();
   renderHeroInfoEditors();
+  renderQuickstartHeroContentEditors();
   renderProjectCardList();
+  renderProjectInlinePreviews();
   renderWorksDisplaySettings();
   renderWorksCategoryOrderList();
   renderWorksVideoForm();
@@ -4619,9 +5968,16 @@ function renderAll() {
   renderStatsItemList();
   renderProcessStepList();
   renderPricingPlanList();
+  renderQuickstartResourceSummary();
+  renderQuickstartProcessStepList();
+  renderQuickstartPricingPlanList();
+  renderQuickstartFinishSummary();
+  renderQuickstartWizard();
   renderCustomWorkList();
   renderContactDetailList();
   renderFooterLinkList();
+  updateAllDetailSectionBulkToggles();
+  syncQuickstartMobileMenu();
   refreshJsonOutput();
   renderLivePreview();
   if (state.activeTab === "embed-card") {
@@ -4643,9 +5999,11 @@ function switchTab(tab) {
   $$(".tab-panel").forEach((panel) => panel.classList.toggle("on", panel.dataset.panel === tab));
   mountLivePreview();
   renderLivePreview();
+  setMobileTabMenuOpen(false);
   if (tab === "json") refreshJsonOutput();
   if (tab === "embed-card") void loadEmbedHTMLFromIndex();
   if (tab === "embed-image") renderCropCanvases();
+  updateDetailSectionBulkToggle($(`.tab-panel[data-panel="${tab}"]`));
 }
 
 function setFloatingActionsOpen(isOpen) {
@@ -4668,8 +6026,13 @@ function applyMinorChange(message = "변경 사항이 반영되었습니다.") {
   renderSummary();
   renderWorksDisplaySettings();
   renderWorksCategoryOrderList();
+  renderProjectInlinePreviews();
+  renderQuickstartResourceSummary();
+  renderQuickstartFinishSummary();
+  renderQuickstartWizard();
   renderNavLinkPresetButtons();
   renderNavTestSession();
+  updateAllDetailSectionBulkToggles();
   refreshJsonOutput();
   renderLivePreview();
   setStatus(message, "success");
@@ -4697,6 +6060,36 @@ function moveArrayItem(items, fromIndex, direction) {
   return true;
 }
 
+function duplicateArrayItem(items, index) {
+  if (!Array.isArray(items) || index < 0 || index >= items.length) return false;
+  items.splice(index + 1, 0, clone(items[index]));
+  return true;
+}
+
+function findWorksVideoInsertIndex(items, nextVideo) {
+  const nextDate = String(nextVideo?.date || "").trim();
+  const list = Array.isArray(items) ? items : [];
+
+  if (!nextDate) {
+    const firstUndatedIndex = list.findIndex((video) => !String(video?.date || "").trim());
+    return firstUndatedIndex === -1 ? list.length : firstUndatedIndex;
+  }
+
+  for (let index = 0; index < list.length; index += 1) {
+    const currentDate = String(list[index]?.date || "").trim();
+    if (!currentDate || nextDate > currentDate) return index;
+  }
+
+  return list.length;
+}
+
+function insertWorksVideo(items, nextVideo) {
+  if (!Array.isArray(items)) return false;
+  const insertIndex = findWorksVideoInsertIndex(items, nextVideo);
+  items.splice(insertIndex, 0, nextVideo);
+  return true;
+}
+
 function listByKey(listKey) {
   switch (listKey) {
     case "nav":
@@ -4704,12 +6097,15 @@ function listByKey(listKey) {
     case "hero-actions":
       return state.data.hero.actions;
     case "career-structured":
+    case "quickstart-career-structured":
       return state.data.hero.infoPanels.career.structuredItems;
     case "career-simple":
       return state.data.hero.infoPanels.career.simpleItems;
     case "hero-tools":
+    case "quickstart-tools":
       return state.data.hero.infoPanels.tools.items;
     case "hero-bgm":
+    case "quickstart-bgm":
       return state.data.hero.infoPanels.bgm.items;
     case "projects":
       return state.data.projects.cards;
@@ -4881,34 +6277,155 @@ function validateJson() {
   }
 }
 
+function handleGitHubRepoInput(event) {
+  state.data.site.githubRepo = event.target.value;
+  renderGitHubRepoField({ preserveInputValue: true, sourceId: event.target.id });
+  scheduleGitHubDefaultBranchLookup(event.target.value, window.location);
+  renderSummary();
+  renderFooterLinkList();
+  refreshJsonOutput();
+  renderLivePreview();
+  setStatus("GitHub Repo 설정이 반영되었습니다.", "success");
+}
+
 function bindDirectInputs() {
-  Object.entries(DIRECT_BINDINGS).forEach(([id, path]) => {
+  directBindingEntries().forEach(([id, path]) => {
     const input = document.getElementById(id);
     if (!input) return;
-    input.addEventListener("input", (event) => {
+    const handleInput = (event) => {
+      if (id === "quickstart-site-github-repo") {
+        handleGitHubRepoInput(event);
+        return;
+      }
+
       setByPath(path, event.target.value);
+      syncDirectInputPeers(id, path);
+      if (id === "projects-youtube-channel-url") {
+        scheduleYouTubeChannelLookup(event.target.value);
+      }
       applyMinorChange("변경 사항이 반영되었습니다.");
-    });
+    };
+    input.addEventListener(input.tagName === "SELECT" ? "change" : "input", handleInput);
   });
 }
 
 function bindCheckboxInputs() {
-  Object.entries(CHECKBOX_BINDINGS).forEach(([id, path]) => {
+  checkboxBindingEntries().forEach(([id, path]) => {
     const input = document.getElementById(id);
     if (!input) return;
     input.addEventListener("change", (event) => {
       setByPath(path, event.target.checked);
+      syncCheckboxInputPeers(id, path);
       applyMinorChange("섹션 표시 설정이 반영되었습니다.");
     });
   });
 }
 
 function bindEvents() {
+  setupDetailSectionCollapsibles();
+  setupDetailSectionBulkToggles();
   bindDirectInputs();
   bindCheckboxInputs();
 
   $$(".tab-button").forEach((button) => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
+  });
+
+  $("#mobile-tab-toggle")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setMobileTabMenuOpen(!state.mobileMenuOpen);
+  });
+
+  $("#quickstart-prev")?.addEventListener("click", () => goQuickstartStep(-1));
+  $("#quickstart-next")?.addEventListener("click", () => goQuickstartStep(1));
+  $("#quickstart-step-dots")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-quickstart-step-target]");
+    if (!button) return;
+    setQuickstartStep(button.dataset.quickstartStepTarget);
+  });
+
+  $("#quickstart-download-social-preview")?.addEventListener("click", downloadSocialPreviewPNG);
+  $("#quickstart-open-assets-upload")?.addEventListener("click", openAssetsUploadPage);
+  $("#quickstart-open-embed-card")?.addEventListener("click", () => switchTab("embed-card"));
+  $("#quickstart-copy-embed-html")?.addEventListener("click", copyEmbedHTML);
+  $("#quickstart-copy-embed-html-index")?.addEventListener("click", copyEmbedHTML);
+  $("#quickstart-open-index-editor")?.addEventListener("click", openQuickstartGitHubIndexEditor);
+  $("#quickstart-embed-upload-done")?.addEventListener("change", (event) => {
+    state.quickstartEmbedUploadDone = event.target.checked;
+    renderQuickstartFinishSummary();
+    renderLivePreview();
+  });
+  $("#quickstart-embed-index-done")?.addEventListener("change", (event) => {
+    state.quickstartEmbedIndexDone = event.target.checked;
+    renderQuickstartFinishSummary();
+    renderLivePreview();
+  });
+
+  $("#quickstart-copy-json")?.addEventListener("click", copyAllJson);
+
+  $("#quickstart-add-process-step")?.addEventListener("click", () => {
+    state.data.pricing.processSteps.push({ number: "", title: "", description: "" });
+    applyDataChange("프로세스 단계를 추가했습니다.");
+  });
+
+  $("#quickstart-process-step-list")?.addEventListener("input", (event) => {
+    const row = event.target.closest("[data-quickstart-process-index]");
+    const field = event.target.dataset.quickstartProcessField;
+    if (!row || !field) return;
+    const index = Number(row.dataset.quickstartProcessIndex);
+    const step = state.data.pricing.processSteps[index];
+    if (!step) return;
+    step[field] = event.target.value;
+    renderProcessStepList();
+    applyMinorChange("프로세스 단계가 반영되었습니다.");
+  });
+
+  $("#quickstart-add-pricing-plan")?.addEventListener("click", () => {
+    state.data.pricing.plans.push({
+      slug: "",
+      design: "shortform",
+      badge: "",
+      icon: "",
+      title: "",
+      description: "",
+      price: "",
+      priceUnit: "",
+      features: [],
+      cta: {
+        label: "",
+        href: "",
+      },
+    });
+    applyDataChange("가격 플랜을 추가했습니다.");
+  });
+
+  $("#quickstart-pricing-plan-list")?.addEventListener("input", (event) => {
+    const row = event.target.closest("[data-quickstart-plan-index]");
+    if (!row) return;
+    const index = Number(row.dataset.quickstartPlanIndex);
+    const plan = state.data.pricing.plans[index];
+    if (!plan) return;
+
+    const field = event.target.dataset.quickstartPlanField;
+    if (field) {
+      plan[field] = event.target.value;
+      renderPricingPlanList();
+      applyMinorChange("가격 플랜이 반영되었습니다.");
+      return;
+    }
+
+    const ctaField = event.target.dataset.quickstartPlanCtaField;
+    if (!ctaField) return;
+    if (!plan.cta || typeof plan.cta !== "object") plan.cta = { label: "", href: "" };
+    plan.cta[ctaField] = event.target.value;
+    renderPricingPlanList();
+    applyMinorChange("플랜 버튼이 반영되었습니다.");
+  });
+
+  $("#quickstart-pricing-plan-list")?.addEventListener("click", (event) => {
+    const toggle = event.target.closest("[data-quickstart-plan-toggle]");
+    if (!toggle) return;
+    toggleQuickstartPlan(Number(toggle.dataset.quickstartPlanToggle));
   });
 
   $("#reload-json")?.addEventListener("click", () => loadJson(true));
@@ -4926,6 +6443,9 @@ function bindEvents() {
   ["embed-meta-title", "embed-meta-description", "embed-meta-image", "embed-meta-url", "embed-meta-image-alt"].forEach((id) => {
     document.getElementById(id)?.addEventListener("input", syncEmbedEditorFromFields);
   });
+  ["quickstart-embed-meta-title", "quickstart-embed-meta-description", "quickstart-embed-meta-image", "quickstart-embed-meta-url", "quickstart-embed-meta-image-alt"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", syncEmbedEditorFromQuickstartFields);
+  });
 
   $("#embed-html-output")?.addEventListener("input", (event) => {
     syncEmbedEditorFromHTML(event.target.value);
@@ -4941,18 +6461,14 @@ function bindEvents() {
     }
   });
 
-  $("#embed-image-file")?.addEventListener("change", (event) => {
-    loadCropImageFile(event.target.files?.[0]);
+  ["embed-image-file", "quickstart-embed-image-file"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("change", (event) => {
+      loadCropImageFile(event.target.files?.[0]);
+    });
   });
 
-  $("#load-embed-image-url")?.addEventListener("click", () => {
-    const url = String($("#embed-image-url")?.value || "").trim();
-    if (!url) {
-      setEmbedImageStatus("이미지 URL을 입력해주세요.", "error");
-      return;
-    }
-    loadCropImage(url);
-  });
+  $("#load-embed-image-url")?.addEventListener("click", () => loadCropImageFromUrlInput("#embed-image-url"));
+  $("#quickstart-load-embed-image-url")?.addEventListener("click", () => loadCropImageFromUrlInput("#quickstart-embed-image-url"));
 
   $("#center-embed-crop")?.addEventListener("click", centerCropSelection);
   $("#reset-embed-crop")?.addEventListener("click", resetCropSelection);
@@ -4974,16 +6490,7 @@ function bindEvents() {
   });
   setFloatingActionsOpen(false);
 
-  $("#site-github-repo")?.addEventListener("input", (event) => {
-    state.data.site.githubRepo = event.target.value;
-    renderGitHubRepoField({ preserveInputValue: true });
-    scheduleGitHubDefaultBranchLookup(event.target.value, window.location);
-    renderSummary();
-    renderFooterLinkList();
-    refreshJsonOutput();
-    renderLivePreview();
-    setStatus("GitHub Repo 설정이 반영되었습니다.", "success");
-  });
+  $("#site-github-repo")?.addEventListener("input", handleGitHubRepoInput);
 
   $("#pricing-grid-columns")?.addEventListener("change", (event) => {
     state.data.pricing.gridColumns = normalizePricingGridColumns(event.target.value, DEFAULT_DATA.pricing.gridColumns);
@@ -4992,7 +6499,8 @@ function bindEvents() {
 
   $("#pricing-process-style")?.addEventListener("change", (event) => {
     state.data.pricing.processStyle = normalizePricingProcessStyle(event.target.value);
-    applyMinorChange("프로세스 프리셋이 반영되었습니다.");
+    syncDirectInputPeers("pricing-process-style", ["pricing", "processStyle"]);
+    applyMinorChange("프로세스 디자인 형식이 반영되었습니다.");
   });
 
   $("#add-nav-link")?.addEventListener("click", () => {
@@ -5037,7 +6545,7 @@ function bindEvents() {
 
   $("#hero-info-layout-preset")?.addEventListener("change", (event) => {
     state.data.hero.infoPanels.layoutPreset = normalizeHeroInfoLayoutPreset(event.target.value);
-    applyDataChange("히어로 3분할 비율이 반영되었습니다.");
+    applyDataChange("히어로 3분할 배치 비율이 반영되었습니다.");
   });
 
   $("#add-career-structured")?.addEventListener("click", () => {
@@ -5108,6 +6616,70 @@ function bindEvents() {
     applyMinorChange("BGM 사용 툴 항목이 반영되었습니다.");
   });
 
+  $("#quickstart-career-mode")?.addEventListener("change", (event) => {
+    state.data.hero.infoPanels.career.mode = normalizeHeroCareerMode(event.target.value);
+    const detailSelect = $("#hero-career-mode");
+    if (detailSelect) detailSelect.value = state.data.hero.infoPanels.career.mode;
+    applyDataChange("경력사항 공개 형식이 반영되었습니다.");
+  });
+
+  $("#quickstart-add-career-structured")?.addEventListener("click", () => {
+    state.data.hero.infoPanels.career.structuredItems.push({ title: "", period: "", description: "" });
+    applyDataChange("구조형 경력 항목을 추가했습니다.");
+  });
+
+  $("#quickstart-career-structured-list")?.addEventListener("input", (event) => {
+    const row = event.target.closest("[data-quickstart-career-structured-index]");
+    const field = event.target.dataset.quickstartCareerStructuredField;
+    if (!row || !field) return;
+    const index = Number(row.dataset.quickstartCareerStructuredIndex);
+    state.data.hero.infoPanels.career.structuredItems[index][field] = event.target.value;
+    renderHeroCareerStructuredList();
+    applyMinorChange("구조형 경력 항목이 반영되었습니다.");
+  });
+
+  $("#quickstart-add-hero-tool")?.addEventListener("click", () => {
+    state.data.hero.infoPanels.tools.items.push({ name: "", logoUrl: "", logoAlt: "" });
+    applyDataChange("사용 가능한 툴 항목을 추가했습니다.");
+  });
+
+  $("#quickstart-tool-presets")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-hero-tool-preset]");
+    if (!button) return;
+    addHeroToolPreset(button.dataset.heroToolPreset);
+  });
+
+  $("#quickstart-tools-list")?.addEventListener("input", (event) => {
+    const row = event.target.closest("[data-quickstart-tools-index]");
+    const field = event.target.dataset.quickstartToolsField;
+    if (!row || !field) return;
+    const index = Number(row.dataset.quickstartToolsIndex);
+    state.data.hero.infoPanels.tools.items[index][field] = event.target.value;
+    renderHeroInfoEditors();
+    applyMinorChange("사용 가능한 툴 항목이 반영되었습니다.");
+  });
+
+  $("#quickstart-add-hero-bgm")?.addEventListener("click", () => {
+    state.data.hero.infoPanels.bgm.items.push({ name: "", logoUrl: "", logoAlt: "" });
+    applyDataChange("BGM 사용 툴 항목을 추가했습니다.");
+  });
+
+  $("#quickstart-bgm-presets")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-hero-bgm-preset]");
+    if (!button) return;
+    addHeroBgmPreset(button.dataset.heroBgmPreset);
+  });
+
+  $("#quickstart-bgm-list")?.addEventListener("input", (event) => {
+    const row = event.target.closest("[data-quickstart-bgm-index]");
+    const field = event.target.dataset.quickstartBgmField;
+    if (!row || !field) return;
+    const index = Number(row.dataset.quickstartBgmIndex);
+    state.data.hero.infoPanels.bgm.items[index][field] = event.target.value;
+    renderHeroInfoEditors();
+    applyMinorChange("BGM 사용 툴 항목이 반영되었습니다.");
+  });
+
   $("#add-project-card")?.addEventListener("click", () => {
     state.data.projects.cards.push({
       layout: "small",
@@ -5162,7 +6734,7 @@ function bindEvents() {
 
   $("#works-visual-preset")?.addEventListener("change", (event) => {
     state.data.works.visualPreset = normalizeWorksVisualPreset(event.target.value);
-    applyMinorChange("영상 포트폴리오 비주얼 프리셋이 반영되었습니다.");
+    applyMinorChange("영상 포트폴리오 디자인 형식이 반영되었습니다.");
   });
 
   $("#works-grid-columns")?.addEventListener("change", (event) => {
@@ -5228,7 +6800,7 @@ function bindEvents() {
       return;
     }
 
-    state.data.works.videos.unshift({
+    insertWorksVideo(state.data.works.videos, {
       id: parsed.id,
       title,
       date,
@@ -5341,6 +6913,7 @@ function bindEvents() {
     if (!row || !field) return;
     const index = Number(row.dataset.processIndex);
     state.data.pricing.processSteps[index][field] = event.target.value;
+    renderQuickstartProcessStepList();
     applyMinorChange("프로세스 단계가 반영되었습니다.");
   });
 
@@ -5388,6 +6961,7 @@ function bindEvents() {
       plan[planField] = planField === "design"
         ? normalizePricingPlanDesign(event.target.value, "shortform")
         : event.target.value;
+      renderQuickstartPricingPlanList();
       applyMinorChange("가격 플랜이 반영되었습니다.");
       return;
     }
@@ -5395,7 +6969,8 @@ function bindEvents() {
     const ctaField = event.target.dataset.planCtaField;
     if (ctaField) {
       plan.cta[ctaField] = event.target.value;
-      applyMinorChange("플랜 CTA가 반영되었습니다.");
+      renderQuickstartPricingPlanList();
+      applyMinorChange("플랜 버튼이 반영되었습니다.");
       return;
     }
 
@@ -5496,6 +7071,49 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const jumpButton = event.target.closest("[data-jump-tab]");
+    if (jumpButton) {
+      jumpToAdminSection(jumpButton);
+      return;
+    }
+
+    const sidebar = $(".admin-sidebar");
+    if (state.mobileMenuOpen && sidebar && !sidebar.contains(event.target)) {
+      setMobileTabMenuOpen(false);
+    }
+
+    const bulkToggle = event.target.closest("[data-detail-section-bulk-toggle]");
+    if (bulkToggle) {
+      const panel = bulkToggle.closest(".tab-panel");
+      if (!panel) return;
+      const shouldOpen = getVisibleDetailSections(panel).some((section) => section.classList.contains("is-collapsed"));
+      setPanelDetailSectionsExpanded(panel, shouldOpen);
+      return;
+    }
+
+    const detailToggle = event.target.closest("[data-toggle-detail-section]");
+    if (detailToggle) {
+      const section = detailToggle.closest(".detail-section");
+      const detailKey = String(detailToggle.dataset.toggleDetailSection || section?.dataset.detailSectionKey || "").trim();
+      if (!section || !detailKey) return;
+      const nextExpanded = section.classList.contains("is-collapsed");
+      setDetailSectionExpanded(detailKey, nextExpanded);
+      applyDetailSectionExpanded(section, nextExpanded);
+      updateDetailSectionBulkToggle(section.closest(".tab-panel"));
+      return;
+    }
+
+    const editorCardToggle = event.target.closest("[data-toggle-editor-card]");
+    if (editorCardToggle) {
+      const container = editorCardToggle.closest("[data-editor-card-key]");
+      const cardKey = String(editorCardToggle.dataset.toggleEditorCard || container?.dataset.editorCardKey || "").trim();
+      if (!container || !cardKey) return;
+      const nextExpanded = container.classList.contains("is-collapsed");
+      setEditorCardExpanded(cardKey, nextExpanded);
+      applyEditorCardExpanded(container, nextExpanded);
+      return;
+    }
+
     const iconOption = event.target.closest("[data-icon-picker-value]");
     if (iconOption) {
       const picker = iconOption.closest("[data-icon-picker]");
@@ -5530,6 +7148,17 @@ function bindEvents() {
       return;
     }
 
+    const copyButton = event.target.closest("[data-copy-list]");
+    if (copyButton) {
+      const listKey = copyButton.dataset.copyList;
+      const index = Number(copyButton.dataset.index);
+      const list = listByKey(listKey);
+      if (duplicateArrayItem(list, index)) {
+        applyDataChange("항목을 복사했습니다.");
+      }
+      return;
+    }
+
     const deleteButton = event.target.closest("[data-delete-list]");
     if (!deleteButton) return;
     const listKey = deleteButton.dataset.deleteList;
@@ -5540,6 +7169,12 @@ function bindEvents() {
     if (!window.confirm("이 항목을 삭제할까요?")) return;
     list.splice(index, 1);
     applyDataChange("항목을 삭제했습니다.");
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.mobileMenuOpen) {
+      setMobileTabMenuOpen(false);
+    }
   });
 
   $("#json-output")?.addEventListener("input", (event) => {

@@ -77,6 +77,16 @@
     "sectionEyebrow": "",
     "sectionTitle": "",
     "sectionMeta": "",
+    "youtubeChannel": {
+      "enabled": false,
+      "url": "",
+      "avatarUrl": "",
+      "name": "",
+      "handle": "",
+      "subscriberText": "",
+      "videoCountText": "",
+      "description": ""
+    },
     "cards": []
   },
   "stats": {
