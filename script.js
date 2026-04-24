@@ -186,6 +186,7 @@ let DATA = clone(DEFAULT_DATA);
 let mobileMenuOpen = false;
 let navIndicatorFrame = 0;
 let navIndicatorEventsBound = false;
+let pendingInitialHashScroll = true;
 const worksFilterState = {
   type: "all",
   category: "all",
@@ -981,13 +982,17 @@ function currentPageName(locationRef = window.location) {
 }
 
 function currentHash(locationRef = window.location) {
-  return String(locationRef.hash || "").trim().toLowerCase();
+  return normalizeHomeSectionHash(String(locationRef.hash || "").trim().toLowerCase());
 }
 
 function pageTargetFromHref(href) {
   const resolved = resolveHref(href);
-  if (!resolved || resolved.startsWith("#") || isExternalHref(resolved) || resolved.startsWith("mailto:") || resolved.startsWith("tel:")) {
+  if (!resolved || isExternalHref(resolved) || resolved.startsWith("mailto:") || resolved.startsWith("tel:")) {
     return { page: "", hash: "" };
+  }
+
+  if (resolved.startsWith("#")) {
+    return { page: currentPageName(), hash: normalizeHomeSectionHash(resolved) };
   }
 
   try {
@@ -1112,11 +1117,18 @@ function getDesktopNavLinks() {
 }
 
 function getLinkMetrics(link, container) {
+  if (link.offsetParent === container) {
+    return {
+      left: link.offsetLeft,
+      width: link.offsetWidth,
+    };
+  }
+
   const linkRect = link.getBoundingClientRect();
   const containerRect = container.getBoundingClientRect();
   return {
-    left: linkRect.left - containerRect.left,
-    width: linkRect.width,
+    left: Math.round(linkRect.left - containerRect.left),
+    width: Math.round(linkRect.width),
   };
 }
 
@@ -1224,6 +1236,29 @@ function syncDesktopNavIndicator() {
 function scheduleDesktopNavIndicatorSync() {
   if (navIndicatorFrame) return;
   navIndicatorFrame = window.requestAnimationFrame(syncDesktopNavIndicator);
+}
+
+function scrollToCurrentHashTarget() {
+  if (!pendingInitialHashScroll) return;
+  pendingInitialHashScroll = false;
+  if (currentPageName() !== "index.html") return;
+
+  const hash = currentHash();
+  if (!hash || hash === "#home") return;
+
+  const targetHash = resolveVisibleHomeSectionHash(hash);
+  if (!targetHash || targetHash === "#home") return;
+
+  window.requestAnimationFrame(() => {
+    const target = document.getElementById(targetHash.slice(1));
+    if (!target || target.hidden) return;
+
+    const headerHeight = document.querySelector("header")?.offsetHeight || 0;
+    const currentScroll = window.scrollY || window.pageYOffset || 0;
+    const targetTop = target.getBoundingClientRect().top + currentScroll - headerHeight;
+    window.scrollTo({ top: Math.max(targetTop, 0), behavior: "auto" });
+    scheduleDesktopNavIndicatorSync();
+  });
 }
 
 function getHeroCareerActiveItems(panel) {
@@ -2190,7 +2225,10 @@ function bindStaticEvents() {
     navIndicatorEventsBound = true;
     window.addEventListener("scroll", scheduleDesktopNavIndicatorSync, { passive: true });
     window.addEventListener("resize", scheduleDesktopNavIndicatorSync);
-    window.addEventListener("hashchange", scheduleDesktopNavIndicatorSync);
+    window.addEventListener("hashchange", () => {
+      renderNav();
+      scheduleDesktopNavIndicatorSync();
+    });
     window.addEventListener("load", scheduleDesktopNavIndicatorSync);
     document.fonts?.ready?.then(() => {
       scheduleDesktopNavIndicatorSync();
@@ -2229,6 +2267,7 @@ function renderAll() {
   renderFreeContent();
   renderFooter();
   scheduleDesktopNavIndicatorSync();
+  scrollToCurrentHashTarget();
 }
 
 async function boot() {
