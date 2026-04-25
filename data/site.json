@@ -117,7 +117,7 @@
     "cards": []
   },
   "stats": {
-    "enabled": true,
+    "enabled": false,
     "items": []
   },
   "works": {
@@ -292,6 +292,11 @@
       },
       {
         "number": "6",
+        "title": "입금",
+        "description": ""
+      },
+      {
+        "number": "7",
         "title": "완성본 전달",
         "description": ""
       }
